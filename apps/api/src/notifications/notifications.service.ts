@@ -1,6 +1,7 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { NotificationType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { PushService } from './push.service';
 
 interface NotifyInput {
   userId: string;
@@ -8,6 +9,8 @@ interface NotifyInput {
   title: string;
   body: string;
   relatedId?: string;
+  /// A dónde llevar al tocar la notificación push (ej. '/messages').
+  url?: string;
   /// Si se repite, no crea duplicado.
   dedupeKey?: string;
 }
@@ -16,7 +19,10 @@ interface NotifyInput {
 export class NotificationsService {
   private readonly logger = new Logger(NotificationsService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly push: PushService,
+  ) {}
 
   /// Crea una notificación (canal in-app) y la despacha a canales externos.
   async notify(input: NotifyInput) {
@@ -38,6 +44,8 @@ export class NotificationsService {
 
     // Canales externos (email/SMS): listos para conectar un proveedor con BAA.
     await this.dispatchExternal(input.userId, input.title, input.body);
+    // Push del navegador (llega aunque la app esté cerrada, si hay suscripción).
+    await this.push.sendToUser(input.userId, { title: input.title, body: input.body, url: input.url });
     return notification;
   }
 

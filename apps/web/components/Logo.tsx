@@ -24,7 +24,7 @@ function Flower({ size = 30 }: { size?: number }) {
 }
 
 // Alto visible del logo (ya recortado) por tamaño.
-const IMG_HEIGHT = { sm: 34, md: 46, lg: 64 };
+const IMG_HEIGHT = { sm: 34, md: 46, lg: 72 };
 // El PNG oficial es casi cuadrado con mucho espacio en blanco arriba/abajo;
 // mostramos solo la franja horizontal central recortando con object-fit.
 const CROP_RATIO = 4.6; // ancho : alto de la franja visible

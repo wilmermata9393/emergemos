@@ -200,6 +200,7 @@ model User {
   providerProfile ProviderProfile?
   patient         Patient?
   refreshTokens   RefreshToken[]
+  pushSubscriptions PushSubscription[]
   authoredNotes   ClinicalNote[]         @relation("AuthoredNotes")
   availability    ProviderAvailability[]
   timeOff         TimeOff[]
@@ -828,6 +829,19 @@ model Notification {
   createdAt DateTime  @default(now())
 
   @@index([userId, createdAt])
+}
+
+/// Suscripción de notificaciones push (Web Push) de un dispositivo/navegador.
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+
+  @@index([userId])
 }
 
 /// Evaluación inicial del paciente. Según las respuestas, el sistema puede

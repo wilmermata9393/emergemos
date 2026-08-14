@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { MessageCategory, NotificationType, UserRole } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 interface Sender {
   id: string;
@@ -9,7 +10,10 @@ interface Sender {
 
 @Injectable()
 export class MessagesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notifications: NotificationsService,
+  ) {}
 
   private async name(userId: string): Promise<string> {
     const u = await this.prisma.user.findUnique({ where: { id: userId }, select: { firstName: true, lastName: true } });
@@ -25,22 +29,20 @@ export class MessagesService {
         where: { isActive: true, role: { in: [UserRole.ADMIN, UserRole.STAFF, UserRole.PROVIDER] } },
         select: { id: true },
       });
-      await this.prisma.notification.createMany({
-        data: staff.map((s) => ({
+      for (const s of staff) {
+        await this.notifications.notify({
           userId: s.id, type: NotificationType.MESSAGE,
-          title: 'Nuevo mensaje de un paciente', body: `${senderName}: ${preview}`, relatedId: threadId,
-        })),
-      });
+          title: 'Nuevo mensaje de un paciente', body: `${senderName}: ${preview}`, relatedId: threadId, url: '/messages',
+        });
+      }
     } else {
       const thread = await this.prisma.messageThread.findUnique({
         where: { id: threadId }, include: { patient: { select: { userId: true } } },
       });
       if (thread) {
-        await this.prisma.notification.create({
-          data: {
-            userId: thread.patient.userId, type: NotificationType.MESSAGE,
-            title: 'Nuevo mensaje de tu equipo de salud', body: `${senderName}: ${preview}`, relatedId: threadId,
-          },
+        await this.notifications.notify({
+          userId: thread.patient.userId, type: NotificationType.MESSAGE,
+          title: 'Nuevo mensaje de tu equipo de salud', body: `${senderName}: ${preview}`, relatedId: threadId, url: '/portal/messages',
         });
       }
     }

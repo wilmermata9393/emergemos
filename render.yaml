@@ -40,6 +40,13 @@ services:
         value: production
       - key: STORAGE_DIR
         value: /tmp/storage
+      # Notificaciones push (Web Push). Genera las llaves y pégalas aquí.
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+      - key: VAPID_SUBJECT
+        value: mailto:soporte@emergemos.app
 
   # ---- Web (Next.js) ----
   - type: web

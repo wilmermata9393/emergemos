@@ -54,9 +54,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen">
       <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
+        <div className="flex items-center justify-between px-6 py-2">
           <Link href="/dashboard">
-            <Logo size="sm" tagline={false} />
+            <Logo size="lg" tagline={false} />
           </Link>
           <div className="flex items-center gap-3">
             {user && (
@@ -68,7 +68,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </div>
         {/* Navegación (siempre visible, con scroll horizontal en móvil) */}
-        <nav className="mx-auto flex max-w-5xl gap-1 overflow-x-auto px-3 pb-2">
+        <nav className="flex gap-1 overflow-x-auto px-5 pb-2">
           {[...BASE_NAV, ...(user?.role === 'ADMIN' ? ADMIN_NAV : [])].map((n) => (
             <Link
               key={n.href}

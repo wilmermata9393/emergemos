@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
+import { enablePush, pushSupported } from '@/lib/push';
 
 interface Notif { id: string; type: string; title: string; body: string; readAt?: string | null; createdAt: string }
 
@@ -13,10 +14,22 @@ export default function NotificationsInbox() {
   const [items, setItems] = useState<Notif[]>([]);
   const [q, setQ] = useState('');
   const [error, setError] = useState('');
+  const [pushMsg, setPushMsg] = useState('');
+  const [pushOn, setPushOn] = useState(false);
 
   // Avisos = todo MENOS los mensajes (esos viven en la pestaña Mensajes).
   async function load() { setItems((await api.get<Notif[]>('/me/notifications')).filter((n) => n.type !== 'MESSAGE')); }
-  useEffect(() => { load().catch((e) => setError(e.message)); }, []);
+  useEffect(() => {
+    load().catch((e) => setError(e.message));
+    if (typeof window !== 'undefined' && 'Notification' in window) setPushOn(Notification.permission === 'granted');
+  }, []);
+
+  async function activarPush() {
+    setPushMsg('');
+    const r = await enablePush();
+    if (r.ok) { setPushOn(true); setPushMsg('¡Listo! Este dispositivo recibirá notificaciones push (aunque cierres la app).'); }
+    else setPushMsg(r.error ?? 'No se pudo activar.');
+  }
 
   async function markRead(id: string) {
     try { await api.post(`/me/notifications/${id}/read`, {}); await load(); } catch (e: any) { setError(e.message); }
@@ -34,6 +47,17 @@ export default function NotificationsInbox() {
         {unread > 0 && <button className="btn-ghost !px-4 !py-2 text-sm" onClick={markAll}>Marcar todas como leídas</button>}
       </div>
       {error && <p className="mb-3 rounded-lg bg-danger-50 px-4 py-3 text-danger-700">{error}</p>}
+
+      {/* Activar notificaciones push en este dispositivo */}
+      {pushSupported() && (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-brand-200 bg-brand-50 px-4 py-3">
+          <span className="text-sm text-brand-800">
+            📲 {pushOn ? 'Notificaciones push activas en este dispositivo.' : 'Activa las notificaciones push para recibir avisos aunque cierres la app.'}
+          </span>
+          {!pushOn && <button className="btn-primary !py-2 text-sm" onClick={activarPush}>Activar en este dispositivo</button>}
+        </div>
+      )}
+      {pushMsg && <p className="mb-3 rounded-lg bg-green-50 px-4 py-3 text-sm text-green-700">{pushMsg}</p>}
 
       {items.length > 0 && (
         <div className="relative mb-4">

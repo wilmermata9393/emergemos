@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { AppointmentStatus, AppointmentType, NotificationType, Prisma, TimeOffType, UserRole } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import {
   CreateServiceDto,
   SetAvailabilityDto,
@@ -18,7 +19,10 @@ const DEFAULT_DURATION = 30;
 
 @Injectable()
 export class SchedulingService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notifications: NotificationsService,
+  ) {}
 
   async patientIdOf(userId: string): Promise<string> {
     const p = await this.prisma.patient.findUnique({ where: { userId }, select: { id: true } });
@@ -194,14 +198,13 @@ export class SchedulingService {
       });
       const when = startAt.toLocaleString('es', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
       const who = patient ? `${patient.user.firstName} ${patient.user.lastName}` : 'Un paciente';
-      await this.prisma.notification.create({
-        data: {
-          userId: dto.providerId,
-          type: NotificationType.APPOINTMENT_REMINDER,
-          title: '⚡ Nueva solicitud de Cita Express',
-          body: `${who} solicitó una cita (${appt.service?.name ?? 'consulta'}) para el ${when}. Ábrela en tu agenda para aceptarla o rechazarla.`,
-          relatedId: appt.id,
-        },
+      await this.notifications.notify({
+        userId: dto.providerId,
+        type: NotificationType.APPOINTMENT_REMINDER,
+        title: '⚡ Nueva solicitud de Cita Express',
+        body: `${who} solicitó una cita (${appt.service?.name ?? 'consulta'}) para el ${when}. Ábrela en tu agenda para aceptarla o rechazarla.`,
+        relatedId: appt.id,
+        url: '/schedule',
       });
     }
     return appt;
