@@ -109,4 +109,13 @@ export class NotificationsService {
     await this.prisma.notification.updateMany({ where: { userId, readAt: null }, data: { readAt: new Date() } });
     return { ok: true };
   }
+
+  /// Marca como leídos los avisos de tipo MENSAJE (al abrir la bandeja de mensajes).
+  async markMessagesRead(userId: string) {
+    await this.prisma.notification.updateMany({
+      where: { userId, type: NotificationType.MESSAGE, readAt: null },
+      data: { readAt: new Date() },
+    });
+    return { ok: true };
+  }
 }

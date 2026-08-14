@@ -3,7 +3,7 @@
 import { useEffect, useRef } from 'react';
 import { api, getToken, getUser } from '@/lib/api';
 
-interface Notif { id: string; title: string; body: string; readAt?: string | null; createdAt: string }
+interface Notif { id: string; type: string; title: string; body: string; readAt?: string | null; createdAt: string }
 
 const POLL_MS = 20000;
 
@@ -24,8 +24,10 @@ export default function NotificationWatcher() {
     async function poll() {
       try {
         const list = await api.get<Notif[]>('/me/notifications');
-        const unread = list.filter((n) => !n.readAt).length;
-        window.dispatchEvent(new CustomEvent('rme-unread', { detail: unread }));
+        // Separamos: los de tipo MESSAGE cuentan para "Mensajes"; el resto para "Avisos".
+        const messages = list.filter((n) => !n.readAt && n.type === 'MESSAGE').length;
+        const avisos = list.filter((n) => !n.readAt && n.type !== 'MESSAGE').length;
+        window.dispatchEvent(new CustomEvent('rme-unread', { detail: { avisos, messages } }));
 
         if (!inited.current) {
           list.forEach((n) => seen.current.add(n.id));

@@ -30,6 +30,12 @@ export class NotificationsController {
   readAll(@CurrentUser() user: AuthenticatedUser) {
     return this.notifications.markAllRead(user.id);
   }
+
+  /// Marca leídos los avisos de mensajes (se llama al entrar a la bandeja de mensajes).
+  @Post('read-messages')
+  readMessages(@CurrentUser() user: AuthenticatedUser) {
+    return this.notifications.markMessagesRead(user.id);
+  }
 }
 
 // Disparo manual de trabajos + difusión de anuncios. Admin (y profesional para anuncios).

@@ -35,10 +35,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   useIdleLogout();
 
-  // Contador de avisos no leídos (lo publica NotificationWatcher).
-  const [unread, setUnread] = useState(0);
+  // Contadores no leídos (los publica NotificationWatcher): avisos y mensajes.
+  const [counts, setCounts] = useState<{ avisos: number; messages: number }>({ avisos: 0, messages: 0 });
   useEffect(() => {
-    const h = (e: Event) => setUnread((e as CustomEvent).detail ?? 0);
+    const h = (e: Event) => { const d = (e as CustomEvent).detail; if (d) setCounts({ avisos: d.avisos ?? 0, messages: d.messages ?? 0 }); };
     window.addEventListener('rme-unread', h);
     return () => window.removeEventListener('rme-unread', h);
   }, []);
@@ -76,8 +76,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               className={`relative shrink-0 rounded-lg px-3 py-2 text-sm font-semibold ${pathname === n.href || (n.href !== '/dashboard' && pathname?.startsWith(n.href)) ? 'bg-brand-50 text-brand-700' : 'text-slate-600 hover:bg-slate-100'}`}
             >
               {n.label}
-              {n.href === '/notifications' && unread > 0 && (
-                <span className="ml-1 inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-accent-600 px-1.5 py-0.5 text-xs font-bold text-white">{unread}</span>
+              {n.href === '/notifications' && counts.avisos > 0 && (
+                <span className="ml-1 inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-accent-600 px-1.5 py-0.5 text-xs font-bold text-white">{counts.avisos}</span>
+              )}
+              {n.href === '/messages' && counts.messages > 0 && (
+                <span className="ml-1 inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-accent-600 px-1.5 py-0.5 text-xs font-bold text-white">{counts.messages}</span>
               )}
             </Link>
           ))}

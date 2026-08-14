@@ -28,11 +28,11 @@ export default function PortalShell({ children }: { children: React.ReactNode })
   const pathname = usePathname();
   const [ready, setReady] = useState(false);
   const [name, setName] = useState('');
-  const [unread, setUnread] = useState(0);
+  const [counts, setCounts] = useState<{ avisos: number; messages: number }>({ avisos: 0, messages: 0 });
   useIdleLogout();
 
   useEffect(() => {
-    const h = (e: Event) => setUnread((e as CustomEvent).detail ?? 0);
+    const h = (e: Event) => { const d = (e as CustomEvent).detail; if (d) setCounts({ avisos: d.avisos ?? 0, messages: d.messages ?? 0 }); };
     window.addEventListener('rme-unread', h);
     return () => window.removeEventListener('rme-unread', h);
   }, []);
@@ -75,8 +75,11 @@ export default function PortalShell({ children }: { children: React.ReactNode })
                 }`}
               >
                 <span className="text-xl">{n.icon}</span> {n.label}
-                {n.href === '/portal/notifications' && unread > 0 && (
-                  <span className="inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-accent-600 px-1.5 py-0.5 text-xs font-bold text-white">{unread}</span>
+                {n.href === '/portal/notifications' && counts.avisos > 0 && (
+                  <span className="inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-accent-600 px-1.5 py-0.5 text-xs font-bold text-white">{counts.avisos}</span>
+                )}
+                {n.href === '/portal/messages' && counts.messages > 0 && (
+                  <span className="inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-accent-600 px-1.5 py-0.5 text-xs font-bold text-white">{counts.messages}</span>
                 )}
               </Link>
             );

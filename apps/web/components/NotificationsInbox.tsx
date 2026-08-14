@@ -14,7 +14,8 @@ export default function NotificationsInbox() {
   const [q, setQ] = useState('');
   const [error, setError] = useState('');
 
-  async function load() { setItems(await api.get<Notif[]>('/me/notifications')); }
+  // Avisos = todo MENOS los mensajes (esos viven en la pestaña Mensajes).
+  async function load() { setItems((await api.get<Notif[]>('/me/notifications')).filter((n) => n.type !== 'MESSAGE')); }
   useEffect(() => { load().catch((e) => setError(e.message)); }, []);
 
   async function markRead(id: string) {

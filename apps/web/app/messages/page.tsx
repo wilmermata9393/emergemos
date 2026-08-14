@@ -21,7 +21,11 @@ export default function StaffMessagesPage() {
   const [q, setQ] = useState('');
   const [error, setError] = useState('');
 
-  useEffect(() => { api.get<Thread[]>('/message-threads').then(setThreads).catch((e) => setError(e.message)); }, []);
+  useEffect(() => {
+    api.get<Thread[]>('/message-threads').then(setThreads).catch((e) => setError(e.message));
+    // Al abrir la bandeja, los avisos de mensajes se dan por leídos.
+    api.post('/me/notifications/read-messages', {}).then(() => window.dispatchEvent(new Event('rme-check'))).catch(() => {});
+  }, []);
 
   const filtered = threads.filter((t) => {
     const name = `${t.patient.user.firstName} ${t.patient.user.lastName}`.toLowerCase();

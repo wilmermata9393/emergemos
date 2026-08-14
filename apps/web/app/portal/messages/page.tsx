@@ -34,7 +34,11 @@ export default function MessagesPage() {
   const [error, setError] = useState('');
 
   async function load() { setThreads(await api.get<Thread[]>('/me/messages')); }
-  useEffect(() => { load().catch((e) => setError(e.message)); }, []);
+  useEffect(() => {
+    load().catch((e) => setError(e.message));
+    // Al abrir Mensajes, los avisos de mensajes se marcan como leídos.
+    api.post('/me/notifications/read-messages', {}).then(() => window.dispatchEvent(new Event('rme-check'))).catch(() => {});
+  }, []);
 
   async function send() {
     if (!subject.trim() || !body.trim()) { setError('Escribe el asunto y el mensaje.'); return; }
