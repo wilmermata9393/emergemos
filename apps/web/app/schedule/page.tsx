@@ -28,6 +28,9 @@ interface Appt {
   patient: { user: { firstName: string; lastName: string; phone: string } };
   provider?: { firstName: string; lastName: string } | null;
 }
+interface SvcLite { id: string; name: string; durationMin: number }
+interface ProvLite { id: string; firstName: string; lastName: string; providerProfile?: { displayTitle?: string | null } | null }
+interface PatientLite { id: string; mrn: string; user: { firstName: string; lastName: string } }
 const isVideo = (t: string) => t === 'TELEHEALTH' || t === 'CLASS' || t === 'GROUP';
 
 export default function SchedulePage() {
@@ -47,6 +50,20 @@ export default function SchedulePage() {
   const [appts, setAppts] = useState<Appt[]>([]);
   const [msg, setMsg] = useState('');
   const [error, setError] = useState('');
+
+  // --- Agendar cita (equipo) ---
+  const [showBook, setShowBook] = useState(false);
+  const [providers, setProviders] = useState<ProvLite[]>([]);
+  const [services, setServices] = useState<SvcLite[]>([]);
+  const [pQuery, setPQuery] = useState('');
+  const [pResults, setPResults] = useState<PatientLite[]>([]);
+  const [bPatient, setBPatient] = useState<PatientLite | null>(null);
+  const [bProviderId, setBProviderId] = useState('');
+  const [bServiceId, setBServiceId] = useState('');
+  const [bType, setBType] = useState('IN_PERSON');
+  const [bDate, setBDate] = useState('');
+  const [bSlots, setBSlots] = useState<string[]>([]);
+  const [bReason, setBReason] = useState('');
 
   const loadAll = useCallback(async () => {
     if (!isProvider) return; // disponibilidad/bloqueos son solo del profesional
@@ -68,6 +85,46 @@ export default function SchedulePage() {
 
   useEffect(() => { loadAll().catch((e) => setError(e.message)); }, [loadAll]);
   useEffect(() => { loadAgenda().catch((e) => setError(e.message)); }, [loadAgenda]);
+
+  // Cargar profesionales y servicios para el formulario de agendar.
+  useEffect(() => {
+    api.get<ProvLite[]>('/providers').then((p) => { setProviders(p); if (p[0]) setBProviderId(p[0].id); }).catch(() => {});
+    api.get<SvcLite[]>('/services').then(setServices).catch(() => {});
+  }, []);
+
+  // Búsqueda de pacientes en vivo (para el formulario de agendar).
+  useEffect(() => {
+    if (!pQuery.trim()) { setPResults([]); return; }
+    const t = setTimeout(async () => {
+      try { setPResults((await api.get<PatientLite[]>(`/patients?q=${encodeURIComponent(pQuery)}`)).slice(0, 6)); } catch {}
+    }, 250);
+    return () => clearTimeout(t);
+  }, [pQuery]);
+
+  // Horarios libres del profesional para el día elegido.
+  const loadBookSlots = useCallback(async () => {
+    if (!bProviderId || !bDate) { setBSlots([]); return; }
+    try {
+      const r = await api.get<{ slots: string[] }>(`/providers/${bProviderId}/slots?date=${bDate}${bServiceId ? `&serviceId=${bServiceId}` : ''}`);
+      setBSlots(r.slots);
+    } catch (e: any) { setError(e.message); }
+  }, [bProviderId, bDate, bServiceId]);
+  useEffect(() => { loadBookSlots(); }, [loadBookSlots]);
+
+  async function bookAppt(slot: string) {
+    if (!bPatient) { setError('Primero elige un paciente.'); return; }
+    setError(''); setMsg('');
+    try {
+      await api.post('/appointments', {
+        patientId: bPatient.id, providerId: bProviderId,
+        serviceId: bServiceId || undefined, startAt: slot, type: bType, reason: bReason,
+      });
+      setMsg('¡Cita agendada! Aparece abajo en la agenda del día.');
+      setAgendaDate(bDate); // salta la agenda al día agendado para que se vea
+      setBReason('');
+      await loadBookSlots(); // refresca horarios (quita el que se ocupó)
+    } catch (e: any) { setError(e.message); }
+  }
 
   const setRow = (i: number, k: keyof Row, v: string | number) => setRows((r) => r.map((row, j) => (j === i ? { ...row, [k]: v } : row)));
 
@@ -102,6 +159,88 @@ export default function SchedulePage() {
       <h1 className="mb-6 text-2xl font-bold">{isProvider ? 'Mi agenda' : 'Agenda de la clínica'}</h1>
       {msg && <p className="mb-4 rounded-lg bg-green-50 px-4 py-3 text-green-700">{msg}</p>}
       {error && <p className="mb-4 rounded-lg bg-danger-50 px-4 py-3 text-danger-700">{error}</p>}
+
+      {/* Agendar cita (equipo) */}
+      <div className="card mb-6">
+        <div className="flex items-center justify-between">
+          <h2 className="text-xl font-bold">Agendar cita</h2>
+          <button className="btn-primary !py-2 text-sm" onClick={() => setShowBook((s) => !s)}>{showBook ? 'Cerrar' : '+ Nueva cita'}</button>
+        </div>
+        {showBook && (
+          <div className="mt-4 space-y-4">
+            {/* Paciente */}
+            <div>
+              <label className="label">Paciente</label>
+              {bPatient ? (
+                <div className="flex items-center justify-between rounded-lg border border-slate-200 p-3">
+                  <span>{bPatient.user.firstName} {bPatient.user.lastName} <span className="text-sm text-slate-400">{bPatient.mrn}</span></span>
+                  <button className="text-sm text-danger-600" onClick={() => { setBPatient(null); setPQuery(''); }}>Cambiar</button>
+                </div>
+              ) : (
+                <>
+                  <input className="field" placeholder="🔍 Buscar por nombre, teléfono o MRN…" value={pQuery} onChange={(e) => setPQuery(e.target.value)} />
+                  {pResults.length > 0 && (
+                    <div className="mt-2 divide-y divide-slate-100 rounded-lg border border-slate-200">
+                      {pResults.map((p) => (
+                        <button key={p.id} onClick={() => { setBPatient(p); setPResults([]); }} className="flex w-full items-center justify-between p-3 text-left hover:bg-slate-50">
+                          <span>{p.user.firstName} {p.user.lastName}</span>
+                          <span className="text-sm text-slate-400">{p.mrn}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label className="label">Profesional</label>
+                <select className="field" value={bProviderId} onChange={(e) => setBProviderId(e.target.value)}>
+                  {providers.length === 0 && <option value="">— No hay profesionales —</option>}
+                  {providers.map((p) => <option key={p.id} value={p.id}>{p.firstName} {p.lastName}{p.providerProfile?.displayTitle ? ` — ${p.providerProfile.displayTitle}` : ''}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="label">Servicio</label>
+                <select className="field" value={bServiceId} onChange={(e) => setBServiceId(e.target.value)}>
+                  <option value="">General (30 min)</option>
+                  {services.map((s) => <option key={s.id} value={s.id}>{s.name} — {s.durationMin} min</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="label">Modalidad</label>
+                <select className="field" value={bType} onChange={(e) => setBType(e.target.value)}>
+                  <option value="IN_PERSON">Presencial</option>
+                  <option value="TELEHEALTH">Telemedicina (video)</option>
+                </select>
+              </div>
+              <div>
+                <label className="label">Día</label>
+                <input type="date" className="field" value={bDate} min={new Date().toISOString().slice(0, 10)} onChange={(e) => setBDate(e.target.value)} />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="label">Motivo (opcional)</label>
+                <input className="field" value={bReason} onChange={(e) => setBReason(e.target.value)} placeholder="Ej. seguimiento" />
+              </div>
+            </div>
+
+            {bDate && (
+              <div>
+                <p className="label">Horarios disponibles</p>
+                {bSlots.length === 0 && <p className="text-slate-500">No hay horarios ese día. Revisa la disponibilidad del profesional (en su "Mi agenda") o prueba otra fecha. La doctora de ejemplo atiende de lunes a viernes.</p>}
+                <div className="flex flex-wrap gap-2">
+                  {bSlots.map((s) => (
+                    <button key={s} onClick={() => bookAppt(s)} className="rounded-xl border border-brand-200 bg-brand-50 px-4 py-2 font-semibold text-brand-700 hover:bg-brand-100">
+                      {new Date(s).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* Citas del día */}
       <div className="card mb-6">
