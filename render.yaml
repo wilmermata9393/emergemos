@@ -23,7 +23,7 @@ services:
     name: rme-api
     runtime: node
     plan: free
-    buildCommand: npm install && npm run api:build:prod
+    buildCommand: npm install --include=dev && npm run api:build:prod
     startCommand: npm run start:prod
     envVars:
       - key: DATABASE_URL
@@ -46,7 +46,7 @@ services:
     name: rme-web
     runtime: node
     plan: free
-    buildCommand: npm install && npm run web:build
+    buildCommand: npm install --include=dev && npm run web:build
     startCommand: npm run web:start
     envVars:
       - key: NEXT_PUBLIC_API_URL
