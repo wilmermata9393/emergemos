@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import { api, getToken, getUser } from '@/lib/api';
+import { chime, initAudioUnlock } from '@/lib/chime';
 
 interface Notif { id: string; type: string; title: string; body: string; readAt?: string | null; createdAt: string }
 
@@ -17,8 +18,9 @@ export default function NotificationWatcher() {
 
   useEffect(() => {
     if (typeof window === 'undefined' || !getToken() || !getUser()) return;
-    // Pedir permiso para notificaciones del sistema (una vez).
+    // Pedir permiso para notificaciones del sistema (una vez) + desbloquear audio.
     try { if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission(); } catch {}
+    initAudioUnlock();
 
     let stop = false;
     async function poll() {
@@ -39,7 +41,7 @@ export default function NotificationWatcher() {
         fresh.forEach((n) => seen.current.add(n.id));
         if (fresh.length > 0) {
           notifySystem(fresh[0]);
-          ding();
+          chime();
         }
       } catch { /* sin sesión o red: ignorar */ }
     }
@@ -64,21 +66,3 @@ function notifySystem(n: Notif) {
   } catch { /* algunos navegadores lo bloquean en segundo plano */ }
 }
 
-function ding() {
-  try {
-    const Ctx = window.AudioContext || (window as any).webkitAudioContext;
-    const ctx = new Ctx();
-    const o = ctx.createOscillator();
-    const g = ctx.createGain();
-    o.type = 'sine';
-    o.frequency.setValueAtTime(880, ctx.currentTime);
-    o.frequency.setValueAtTime(1175, ctx.currentTime + 0.12);
-    o.connect(g); g.connect(ctx.destination);
-    g.gain.setValueAtTime(0.0001, ctx.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.2, ctx.currentTime + 0.02);
-    g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.35);
-    o.start();
-    o.stop(ctx.currentTime + 0.36);
-    setTimeout(() => ctx.close().catch(() => {}), 600);
-  } catch { /* audio bloqueado sin interacción */ }
-}
