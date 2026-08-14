@@ -43,7 +43,10 @@ export default function NotificationWatcher() {
     }
     poll();
     const t = setInterval(() => { if (!stop) poll(); }, POLL_MS);
-    return () => { stop = true; clearInterval(t); };
+    // Permite forzar una revisión inmediata (ej. tras enviar algo).
+    const onCheck = () => { if (!stop) poll(); };
+    window.addEventListener('rme-check', onCheck);
+    return () => { stop = true; clearInterval(t); window.removeEventListener('rme-check', onCheck); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

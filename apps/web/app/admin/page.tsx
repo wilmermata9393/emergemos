@@ -29,6 +29,15 @@ export default function AdminHome() {
     finally { setRunning(false); }
   }
 
+  async function testNotif() {
+    setMsg(''); setError('');
+    try {
+      await api.post('/notifications/test', {});
+      setMsg('Notificación de prueba enviada. En unos segundos debería sonar y aparecer arriba en 🔔 Avisos.');
+      setTimeout(() => window.dispatchEvent(new Event('rme-check')), 1200);
+    } catch (e: any) { setError(e.message); }
+  }
+
   return (
     <AppShell>
       <h1 className="mb-1 text-2xl font-bold">Administración</h1>
@@ -52,9 +61,12 @@ export default function AdminHome() {
           Automáticos: cada mañana la agenda del día a cada profesional, y recordatorios al paciente
           <strong> 3 días antes</strong> y <strong>1 día antes</strong> de su cita. Pulsa el botón para generarlos ahora (prueba).
         </p>
-        <button className="btn-primary mt-3 !py-2 text-sm" onClick={runJobs} disabled={running}>
-          {running ? 'Generando…' : 'Generar avisos ahora'}
-        </button>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button className="btn-primary !py-2 text-sm" onClick={runJobs} disabled={running}>
+            {running ? 'Generando…' : 'Generar avisos ahora'}
+          </button>
+          <button className="btn-ghost !py-2 text-sm" onClick={testNotif}>🔔 Probar notificación (a mí)</button>
+        </div>
         {msg && <p className="mt-3 rounded-lg bg-green-50 px-4 py-3 text-sm text-green-700">{msg}</p>}
         {error && <p className="mt-3 rounded-lg bg-danger-50 px-4 py-3 text-sm text-danger-700">{error}</p>}
       </div>

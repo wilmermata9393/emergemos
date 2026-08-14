@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Param, Post } from '@nestjs/common';
-import { UserRole } from '@prisma/client';
+import { NotificationType, UserRole } from '@prisma/client';
 import { NotificationsService } from './notifications.service';
 import { NotificationsScheduler } from './notifications.scheduler';
 import { BroadcastDto } from './dto/broadcast.dto';
@@ -44,6 +44,19 @@ export class NotificationsAdminController {
   @Post('run-jobs')
   run() {
     return this.scheduler.runAll();
+  }
+
+  /// Crea una notificación de prueba para el propio usuario (diagnóstico).
+  @Roles(UserRole.ADMIN, UserRole.PROVIDER, UserRole.STAFF)
+  @Post('test')
+  test(@CurrentUser() user: AuthenticatedUser) {
+    return this.notifications.notify({
+      userId: user.id,
+      type: NotificationType.GENERAL,
+      title: '🔔 Notificación de prueba',
+      body: 'Si ves esto (y sonó el timbre), las notificaciones funcionan correctamente.',
+      dedupeKey: `test-${user.id}-${Date.now()}`,
+    });
   }
 
   /// Difunde un anuncio/promoción (admin o profesional).
