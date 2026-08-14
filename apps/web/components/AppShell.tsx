@@ -20,6 +20,7 @@ const BASE_NAV = [
   { href: '/dashboard', label: 'Inicio' },
   { href: '/patients', label: 'Pacientes' },
   { href: '/schedule', label: 'Mi agenda' },
+  { href: '/messages', label: '💬 Mensajes' },
   { href: '/notifications', label: '🔔 Avisos' },
 ];
 const ADMIN_NAV = [

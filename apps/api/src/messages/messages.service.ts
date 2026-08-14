@@ -41,6 +41,19 @@ export class MessagesService {
     });
   }
 
+  /// Bandeja del equipo: TODOS los hilos, con paciente y último mensaje.
+  listAllThreads() {
+    return this.prisma.messageThread.findMany({
+      orderBy: { updatedAt: 'desc' },
+      take: 200,
+      include: {
+        messages: { orderBy: { createdAt: 'desc' }, take: 1 },
+        patient: { include: { user: { select: { firstName: true, lastName: true } } } },
+        _count: { select: { messages: true } },
+      },
+    });
+  }
+
   /// Lista los hilos de un paciente con un resumen del último mensaje.
   async listThreads(patientId: string) {
     return this.prisma.messageThread.findMany({

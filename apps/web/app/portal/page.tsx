@@ -11,6 +11,7 @@ interface Profile {
 }
 
 const CARDS = [
+  { href: '/portal/profile', icon: '👤', title: 'Mi perfil', desc: 'Tu foto, tus datos, plan médico e historial.' },
   { href: '/portal/appointments', icon: '📅', title: 'Mis citas', desc: 'Agenda una cita y revisa las próximas.' },
   { href: '/portal/prescriptions', icon: '💊', title: 'Recetas y labs', desc: 'Consulta tus medicamentos y órdenes de laboratorio.' },
   { href: '/portal/diary', icon: '📔', title: 'Mi diario', desc: 'Anota cómo te sientes, síntomas y medicamentos.' },

@@ -53,6 +53,39 @@ export class NotificationsService {
     if (user.phone) this.logger.log(`[SMS stub] a ${user.phone}: ${title}`);
   }
 
+  /// Difunde un anuncio/promoción a un grupo de pacientes.
+  ///  - ALL: todos los pacientes con cuenta activa.
+  ///  - SERVICE: solo los pacientes que han recibido/tienen ese servicio.
+  async broadcast(input: { title: string; body: string; audience: 'ALL' | 'SERVICE'; serviceId?: string }) {
+    let userIds: string[] = [];
+    if (input.audience === 'SERVICE' && input.serviceId) {
+      const appts = await this.prisma.appointment.findMany({
+        where: { serviceId: input.serviceId, patient: { user: { isActive: true } } },
+        select: { patient: { select: { userId: true } } },
+      });
+      userIds = [...new Set(appts.map((a) => a.patient.userId))];
+    } else {
+      const patients = await this.prisma.patient.findMany({
+        where: { user: { isActive: true } },
+        select: { userId: true },
+      });
+      userIds = patients.map((p) => p.userId);
+    }
+
+    const stamp = Date.now();
+    for (const uid of userIds) {
+      await this.notify({
+        userId: uid,
+        type: NotificationType.GENERAL,
+        title: input.title,
+        body: input.body,
+        dedupeKey: `bcast-${stamp}-${uid}`,
+      });
+    }
+    this.logger.log(`Anuncio difundido a ${userIds.length} paciente(s).`);
+    return { sent: userIds.length };
+  }
+
   listForUser(userId: string) {
     return this.prisma.notification.findMany({
       where: { userId },

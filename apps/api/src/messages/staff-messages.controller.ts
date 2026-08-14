@@ -13,6 +13,13 @@ const CLINICAL = [UserRole.ADMIN, UserRole.STAFF, UserRole.PROVIDER, UserRole.ST
 export class StaffMessagesController {
   constructor(private readonly messages: MessagesService) {}
 
+  /// Bandeja general del equipo: todos los mensajes de todos los pacientes.
+  @Roles(...CLINICAL)
+  @Get('message-threads')
+  listAll() {
+    return this.messages.listAllThreads();
+  }
+
   @Roles(...CLINICAL)
   @Audit(AuditAction.VIEW, 'MessageThread')
   @Get('patients/:patientId/message-threads')

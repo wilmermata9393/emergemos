@@ -1,7 +1,8 @@
-import { Controller, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post } from '@nestjs/common';
 import { UserRole } from '@prisma/client';
 import { NotificationsService } from './notifications.service';
 import { NotificationsScheduler } from './notifications.scheduler';
+import { BroadcastDto } from './dto/broadcast.dto';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser, AuthenticatedUser } from '../common/decorators/current-user.decorator';
 
@@ -31,14 +32,24 @@ export class NotificationsController {
   }
 }
 
-// Disparo manual de los trabajos (para pruebas / operación). Solo admin.
+// Disparo manual de trabajos + difusión de anuncios. Admin (y profesional para anuncios).
 @Controller('notifications')
 export class NotificationsAdminController {
-  constructor(private readonly scheduler: NotificationsScheduler) {}
+  constructor(
+    private readonly scheduler: NotificationsScheduler,
+    private readonly notifications: NotificationsService,
+  ) {}
 
   @Roles(UserRole.ADMIN)
   @Post('run-jobs')
   run() {
     return this.scheduler.runAll();
+  }
+
+  /// Difunde un anuncio/promoción (admin o profesional).
+  @Roles(UserRole.ADMIN, UserRole.PROVIDER)
+  @Post('broadcast')
+  broadcast(@Body() dto: BroadcastDto) {
+    return this.notifications.broadcast(dto);
   }
 }

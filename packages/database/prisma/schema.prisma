@@ -276,6 +276,9 @@ model Patient {
   emergencyContactName  String?
   emergencyContactPhone String?
 
+  /// Foto de perfil del paciente (id del archivo cifrado en StoredFile).
+  avatarFileId String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

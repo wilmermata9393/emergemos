@@ -12,6 +12,7 @@ const SECTIONS = [
   { href: '/admin/plans', icon: '💳', title: 'Planes médicos', desc: 'Planes aceptados (para el select)' },
   { href: '/admin/lab-tests', icon: '🧪', title: 'Laboratorios', desc: 'Catálogo de pruebas de lab' },
   { href: '/admin/templates', icon: '📝', title: 'Plantillas de notas', desc: 'Crear plantillas por disciplina' },
+  { href: '/admin/broadcast', icon: '📢', title: 'Anuncios / promociones', desc: 'Enviar avisos a todos o por servicio' },
 ];
 
 export default function AdminHome() {

@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   Param,
+  Patch,
   Post,
   Res,
   UploadedFile,
@@ -20,12 +21,14 @@ import { FilesService } from '../files/files.service';
 import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateDiaryDto } from './dto/diary.dto';
+import { UpdateMyProfileDto } from './dto/profile.dto';
 import { CreateThreadDto, ReplyDto } from '../messages/dto/message.dto';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser, AuthenticatedUser } from '../common/decorators/current-user.decorator';
 
 const MAX_SIZE = 15 * 1024 * 1024;
 const ALLOWED = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'application/pdf'];
+const ALLOWED_IMG = ['image/jpeg', 'image/png', 'image/webp', 'image/heic'];
 
 // Portal del paciente: cada quien accede SOLO a sus propios datos.
 @Roles(UserRole.PATIENT)
@@ -42,6 +45,47 @@ export class PortalController {
   @Get('profile')
   profile(@CurrentUser() user: AuthenticatedUser) {
     return this.portal.myProfile(user.id);
+  }
+
+  /// El paciente edita SOLO su teléfono, correo y dirección.
+  @Patch('profile')
+  updateProfile(@CurrentUser() user: AuthenticatedUser, @Body() dto: UpdateMyProfileDto) {
+    return this.portal.updateMyProfile(user.id, dto);
+  }
+
+  // ---- Foto de perfil ----
+  @Post('avatar')
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_SIZE } }))
+  async uploadAvatar(
+    @CurrentUser() user: AuthenticatedUser,
+    @UploadedFile() file: { buffer: Buffer; mimetype: string; originalname: string; size: number },
+  ) {
+    if (!file) throw new BadRequestException('Falta la imagen.');
+    if (!ALLOWED_IMG.includes(file.mimetype)) throw new BadRequestException('La foto debe ser una imagen (JPG, PNG, WEBP).');
+    return this.portal.setAvatar(user.id, file);
+  }
+
+  @Get('avatar')
+  async getAvatar(@CurrentUser() user: AuthenticatedUser, @Res() res: Response) {
+    const fileId = await this.portal.avatarFileId(user.id);
+    const { meta, data } = await this.files.get(fileId);
+    res.setHeader('Content-Type', meta.mimeType);
+    res.send(data);
+  }
+
+  // ---- Imagen de la tarjeta del plan médico (propia) ----
+  @Get('insurance/:cardId/:side')
+  async getInsuranceImage(
+    @Param('cardId') cardId: string,
+    @Param('side') side: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Res() res: Response,
+  ) {
+    const fileId = await this.portal.insuranceImageFileId(user.id, cardId, side === 'back' ? 'back' : 'front');
+    const { meta, data } = await this.files.get(fileId);
+    res.setHeader('Content-Type', meta.mimeType);
+    res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(meta.originalName)}"`);
+    res.send(data);
   }
 
   // ---- Diario ----
