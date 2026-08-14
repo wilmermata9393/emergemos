@@ -1,7 +1,9 @@
 'use client';
 
 import Link from 'next/link';
+import { useState } from 'react';
 import AppShell from '@/components/AppShell';
+import { api } from '@/lib/api';
 
 const SECTIONS = [
   { href: '/admin/approvals', icon: '⏳', title: 'Aprobaciones', desc: 'Pacientes que esperan aprobación' },
@@ -13,6 +15,19 @@ const SECTIONS = [
 ];
 
 export default function AdminHome() {
+  const [msg, setMsg] = useState('');
+  const [error, setError] = useState('');
+  const [running, setRunning] = useState(false);
+
+  async function runJobs() {
+    setMsg(''); setError(''); setRunning(true);
+    try {
+      const r = await api.post<{ reminders: number; providerAgenda: number; birthdays: number }>('/notifications/run-jobs', {});
+      setMsg(`Avisos generados ✓ — recordatorios: ${r.reminders}, agenda de profesionales: ${r.providerAgenda}, cumpleaños: ${r.birthdays}. Revisa la campana 🔔 de cada usuario.`);
+    } catch (e: any) { setError(e.message); }
+    finally { setRunning(false); }
+  }
+
   return (
     <AppShell>
       <h1 className="mb-1 text-2xl font-bold">Administración</h1>
@@ -27,6 +42,20 @@ export default function AdminHome() {
             </div>
           </Link>
         ))}
+      </div>
+
+      {/* Avisos / notificaciones programadas */}
+      <div className="card mt-6">
+        <h2 className="text-lg font-bold">🔔 Avisos programados</h2>
+        <p className="mt-1 text-sm text-slate-600">
+          Automáticos: cada mañana la agenda del día a cada profesional, y recordatorios al paciente
+          <strong> 3 días antes</strong> y <strong>1 día antes</strong> de su cita. Pulsa el botón para generarlos ahora (prueba).
+        </p>
+        <button className="btn-primary mt-3 !py-2 text-sm" onClick={runJobs} disabled={running}>
+          {running ? 'Generando…' : 'Generar avisos ahora'}
+        </button>
+        {msg && <p className="mt-3 rounded-lg bg-green-50 px-4 py-3 text-sm text-green-700">{msg}</p>}
+        {error && <p className="mt-3 rounded-lg bg-danger-50 px-4 py-3 text-sm text-danger-700">{error}</p>}
       </div>
     </AppShell>
   );
