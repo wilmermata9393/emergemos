@@ -22,10 +22,14 @@ export class AppointmentsController {
     return this.scheduling.book(dto, dto.patientId, user.id, true);
   }
 
+  /// Lista citas entre dos fechas. Con ?providerId= filtra por profesional;
+  /// sin él, devuelve la agenda de TODA la clínica (para admin/recepción).
   @Roles(...CLINICAL)
   @Get()
-  listByProvider(@Query('providerId') providerId: string, @Query('from') from: string, @Query('to') to: string) {
-    return this.scheduling.listForProvider(providerId, from, to);
+  list(@Query('providerId') providerId: string, @Query('from') from: string, @Query('to') to: string) {
+    return providerId
+      ? this.scheduling.listForProvider(providerId, from, to)
+      : this.scheduling.listAll(from, to);
   }
 
   @Roles(...CLINICAL)

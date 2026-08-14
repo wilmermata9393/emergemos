@@ -193,6 +193,21 @@ export class SchedulingService {
       include: {
         service: { select: { name: true } },
         patient: { include: { user: { select: { firstName: true, lastName: true, phone: true } } } },
+        provider: { select: { firstName: true, lastName: true } },
+      },
+    });
+  }
+
+  /// Agenda de TODA la clínica (todas las citas de todos los profesionales).
+  /// Para administración/recepción, entre dos fechas (?from=&to= en ISO).
+  listAll(from: string, to: string) {
+    return this.prisma.appointment.findMany({
+      where: { startAt: { gte: new Date(from), lte: new Date(to) } },
+      orderBy: { startAt: 'asc' },
+      include: {
+        service: { select: { name: true } },
+        patient: { include: { user: { select: { firstName: true, lastName: true, phone: true } } } },
+        provider: { select: { firstName: true, lastName: true } },
       },
     });
   }
