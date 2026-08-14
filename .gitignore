@@ -36,5 +36,8 @@ Thumbs.db
 .idea/
 
 # Archivos de pacientes / uploads (nunca en el repo)
-uploads/
-storage/
+# Solo carpetas en la RAÍZ del repo: son datos en tiempo de ejecución, no código.
+/uploads/
+/storage/
+# El código fuente del módulo de storage SÍ se versiona:
+!apps/api/src/storage/
