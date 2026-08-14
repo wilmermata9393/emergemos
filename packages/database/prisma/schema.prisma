@@ -1,0 +1,834 @@
+// ============================================================================
+//  MODELO DE DATOS — Récord Médico Electrónico
+//  Motor: PostgreSQL   ·   ORM: Prisma
+//
+//  NOTA SOBRE HIPAA:
+//   - La información de salud protegida (PHI) sensible se marca abajo. En
+//     producción, campos como número de seguro/plan y firmas se cifran a
+//     nivel de aplicación (AES-256) antes de guardarse, y las imágenes
+//     (tarjetas de seguro, documentos) NO se guardan en la base de datos:
+//     solo se guarda una "clave" que apunta al almacenamiento cifrado (S3
+//     con BAA). Ver docs/HIPAA.md.
+//   - La tabla AuditLog es de solo-inserción (append-only): registra cada
+//     acceso y cambio a datos de pacientes. Nunca se edita ni se borra.
+// ============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ----------------------------------------------------------------------------
+//  ENUMERACIONES
+// ----------------------------------------------------------------------------
+
+/// Rol principal del usuario. Determina qué puede ver y hacer (RBAC).
+enum UserRole {
+  ADMIN //         Administrador del sistema
+  STAFF //         Personal administrativo (recepción, secretaría)
+  STUDENT //       Estudiantes / practicantes (documentan, pueden requerir co-firma)
+  PROVIDER //      Profesional de la salud (con o sin NPI; ver ProviderProfile)
+  PATIENT //       Paciente (acceso al portal)
+}
+
+/// Disciplina del profesional de la salud.
+enum Discipline {
+  INTERNAL_MEDICINE //  Medicina interna
+  GENERAL_MEDICINE //   Medicina general
+  CHIROPRACTIC //       Quiropráctica
+  DIETETICS //          Dietista
+  NUTRITION //          Nutricionista
+  ADDICTION_COUNSELING // Consejería de adicciones
+  PSYCHOLOGY //         Psicología
+  PSYCHIATRY //         Psiquiatría
+  GYNECOLOGY //         Ginecología
+  EXERCISE_PHYSIOLOGY // Fisiología del ejercicio (sin NPI)
+  MASSAGE_THERAPY //    Masajista (sin NPI)
+  OTHER
+}
+
+/// Sexo biológico registrado (distinto del pronombre, que es texto libre).
+enum Sex {
+  MALE
+  FEMALE
+  INTERSEX
+  UNKNOWN
+}
+
+/// Tipos de formularios de consentimiento.
+enum ConsentType {
+  ELECTRONIC_RECORD_USE //           Uso del récord electrónico
+  HIPAA //                           Aviso de privacidad HIPAA
+  PATIENT_RIGHTS_RESPONSIBILITIES // Carta de derechos y responsabilidades
+  CYBERSECURITY //                   Consentimiento de ciberseguridad
+  ADDITIONAL //                      Consentimiento adicional (según evaluación inicial)
+}
+
+/// Acciones registradas en la auditoría (HIPAA).
+enum AuditAction {
+  LOGIN
+  LOGIN_FAILED
+  LOGOUT
+  VIEW //     Lectura de PHI
+  CREATE
+  UPDATE
+  DELETE
+  SIGN //     Firma de nota u orden
+  EXPORT //   Descarga / exportación de datos
+  ACCESS_DENIED
+}
+
+/// Estado de una nota clínica.
+enum NoteStatus {
+  DRAFT //   Borrador editable libremente por el autor
+  SIGNED //  Firmada y bloqueada; los cambios crean una enmienda con historial
+}
+
+/// Tipo de notificación.
+enum NotificationType {
+  APPOINTMENT_REMINDER //  Recordatorio de cita
+  BIRTHDAY //              Cumpleaños
+  FOLLOW_UP //             Seguimiento
+  MESSAGE //               Mensaje nuevo
+  GENERAL
+}
+
+/// Asunto/tipo de un hilo de mensajes.
+enum MessageCategory {
+  APPOINTMENT //   Citas
+  PRESCRIPTION //  Recetas / medicamentos
+  CLINICAL //      Consulta clínica
+  BILLING //       Facturación / seguros
+  GENERAL //       General
+}
+
+/// Estado de aprobación de un paciente.
+enum PatientStatus {
+  PENDING //  Auto-registrado, pendiente de aprobación del equipo
+  ACTIVE //   Aprobado, con acceso a la plataforma
+  REJECTED // Rechazado
+}
+
+/// Estado de una orden de laboratorio.
+enum LabOrderStatus {
+  ORDERED //     Ordenada
+  COLLECTED //   Muestra tomada
+  RESULTED //    Con resultados
+  CANCELLED //   Cancelada
+}
+
+/// Estado de una orden de medicamento (receta).
+enum MedicationOrderStatus {
+  DRAFT //      Borrador (sin firmar)
+  SIGNED //     Firmada por el prescriptor
+  CANCELLED //  Cancelada
+}
+
+/// Estado de una cita.
+enum AppointmentStatus {
+  REQUESTED //             Solicitada (pendiente de confirmar por el equipo)
+  CONFIRMED //             Confirmada
+  RESCHEDULE_REQUESTED //  El paciente pidió reagendar
+  CANCELLED //             Cancelada
+  COMPLETED //             Realizada
+  NO_SHOW //               El paciente no asistió
+}
+
+/// Tipo de cita.
+enum AppointmentType {
+  IN_PERSON //   Presencial
+  TELEHEALTH //  Telemedicina individual
+  CLASS //       Clase virtual
+  GROUP //       Cita grupal
+}
+
+/// Tipo de bloqueo de agenda (tiempo no disponible).
+enum TimeOffType {
+  VACATION //  Vacaciones
+  SICK //      Enfermedad
+  HOLIDAY //   Día de fiesta
+  BREAK //     Break (lactancia, café, salud)
+  OTHER
+}
+
+/// Categoría de un documento del paciente.
+enum DocumentCategory {
+  LAB //         Laboratorio
+  RESULT //      Resultado de estudio
+  IMAGE //       Imagen (rayos X, foto, etc.)
+  INSURANCE //   Plan médico
+  CONSENT //     Consentimiento firmado
+  OTHER
+}
+
+// ----------------------------------------------------------------------------
+//  IDENTIDAD Y ACCESO
+// ----------------------------------------------------------------------------
+
+/// Cuenta de usuario. Todos inician sesión aquí: staff, profesionales y
+/// pacientes. Los PACIENTES inician sesión con su TELÉFONO (no email) + clave.
+model User {
+  id       String   @id @default(cuid())
+  role     UserRole
+  /// Teléfono en formato E.164 (ej. +17875551234). Login principal de pacientes.
+  phone    String   @unique
+  /// Email opcional (muchos pacientes mayores no tienen).
+  email    String?  @unique
+  /// Hash de la contraseña (bcrypt/argon2). NUNCA se guarda la clave en texto.
+  passwordHash String
+
+  firstName String
+  lastName  String
+  /// Pronombre preferido (texto libre: "ella", "él", "elle", etc.)
+  pronoun   String?
+
+  isActive           Boolean   @default(true)
+  /// Fuerza cambio de contraseña en el próximo inicio de sesión.
+  mustChangePassword Boolean   @default(false)
+  lastLoginAt        DateTime?
+  /// Control de bloqueo por intentos fallidos (protección contra fuerza bruta).
+  failedLoginAttempts Int      @default(0)
+  lockedUntil        DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  providerProfile ProviderProfile?
+  patient         Patient?
+  refreshTokens   RefreshToken[]
+  authoredNotes   ClinicalNote[]         @relation("AuthoredNotes")
+  availability    ProviderAvailability[]
+  timeOff         TimeOff[]
+  providerAppointments Appointment[]     @relation("ProviderAppointments")
+  notifications   Notification[]
+  auditLogs       AuditLog[]             @relation("ActorAuditLogs")
+
+  @@index([role])
+}
+
+/// Datos específicos de un profesional de la salud (o estudiante).
+model ProviderProfile {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  discipline Discipline
+  /// National Provider Identifier. Solo profesionales con NPI lo tienen.
+  npi        String?    @unique
+  hasNpi     Boolean    @default(false)
+  /// Puede firmar órdenes de medicamentos. Requiere NPI y credenciales.
+  canPrescribe Boolean  @default(false)
+  licenseNumber String?
+
+  /// Biografía pública para el Online Booking.
+  bio         String?
+  /// Título profesional mostrado a pacientes (ej. "Dra. en Quiropráctica").
+  displayTitle String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([discipline])
+}
+
+/// Token de refresco de sesión (rotación segura). Permite cerrar sesiones.
+model RefreshToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Se guarda el hash del token, no el token en sí.
+  tokenHash String    @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+}
+
+// ----------------------------------------------------------------------------
+//  PACIENTE
+// ----------------------------------------------------------------------------
+
+/// Registro clínico del paciente. Se vincula a una cuenta User (portal).
+model Patient {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// Número de récord médico (MRN), legible y único.
+  mrn         String   @unique
+  dateOfBirth DateTime
+  sex         Sex      @default(UNKNOWN)
+  /// Estado de aprobación (los auto-registrados quedan PENDING hasta aprobarse).
+  status      PatientStatus @default(ACTIVE)
+
+  // --- Demografía / contacto ---
+  addressLine String?
+  city        String?
+  state       String?
+  zip         String?
+  emergencyContactName  String?
+  emergencyContactPhone String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  insuranceCards InsuranceCard[]
+  consents       Consent[]
+  vitals         VitalsRecord[]
+  clinicalNotes  ClinicalNote[]
+  documents      PatientDocument[]
+  diaryEntries     DiaryEntry[]
+  messageThreads   MessageThread[]
+  appointments     Appointment[]
+  labOrders        LabOrder[]
+  medicationOrders MedicationOrder[]
+  initialAssessments InitialAssessment[]
+  auditLogs        AuditLog[]      @relation("PatientAuditLogs")
+
+  @@index([mrn])
+}
+
+/// Tarjeta del plan médico (frente y reverso). Las imágenes NO se guardan
+/// aquí: solo la "clave" del objeto en almacenamiento cifrado (S3/BAA).
+model InsuranceCard {
+  id        String  @id @default(cuid())
+  patientId String
+  patient   Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  planName       String?
+  memberId       String? //  PHI — se cifra a nivel de aplicación
+  frontImageKey  String? //  referencia al archivo cifrado (no la imagen)
+  backImageKey   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([patientId])
+}
+
+/// Consentimiento firmado por el paciente (firma remota con fecha y hora).
+model Consent {
+  id        String      @id @default(cuid())
+  patientId String
+  patient   Patient     @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  type            ConsentType
+  /// Documento asociado (texto/versión que se firmó).
+  documentId      String?
+  document        ConsentDocument? @relation(fields: [documentId], references: [id])
+  /// Versión del documento firmado (para saber qué texto aceptó).
+  documentVersion String
+  signedAt        DateTime?
+  /// Nombre tal como lo escribió/firmó el paciente.
+  signatureName   String?
+  /// Clave de la imagen de firma manuscrita (almacenamiento cifrado).
+  signatureImageKey String?
+  ipAddress       String?
+
+  createdAt DateTime @default(now())
+
+  @@index([patientId, type])
+}
+
+// ----------------------------------------------------------------------------
+//  AUDITORÍA (HIPAA) — solo inserción, nunca se edita ni borra
+// ----------------------------------------------------------------------------
+
+/// Registro de cada acceso y cambio a datos de pacientes.
+/// Requisito central de HIPAA: saber QUIÉN vio/cambió QUÉ y CUÁNDO.
+model AuditLog {
+  id     String @id @default(cuid())
+
+  /// Quién realizó la acción (puede ser null para acciones del sistema).
+  actorId String?
+  actor   User?   @relation("ActorAuditLogs", fields: [actorId], references: [id], onDelete: SetNull)
+
+  action AuditAction
+  /// Tipo de entidad afectada (ej. "Patient", "Consent", "Vitals").
+  entityType String
+  entityId   String?
+
+  /// Paciente cuyos datos se tocaron (para buscar "quién vio a este paciente").
+  patientId String?
+  patient   Patient? @relation("PatientAuditLogs", fields: [patientId], references: [id], onDelete: SetNull)
+
+  ipAddress String?
+  userAgent String?
+  /// Detalles adicionales (campos cambiados, motivo, etc.) en formato JSON.
+  metadata  Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([patientId])
+  @@index([actorId])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}
+
+// ----------------------------------------------------------------------------
+//  SIGNOS VITALES (Fase 1)
+// ----------------------------------------------------------------------------
+
+/// Una toma de signos vitales de un paciente.
+///
+/// UNIDADES: se guardan siempre en unidades canónicas (kg, cm, °C). La app
+/// convierte a libras / pies-pulgadas / °F para mostrar, según prefiera el
+/// usuario. Así los cálculos (BMI, percentiles) son siempre consistentes.
+model VitalsRecord {
+  id        String  @id @default(cuid())
+  patientId String
+  patient   Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  /// Quién tomó los vitales (profesional/estudiante/staff).
+  recordedById String?
+  recordedAt   DateTime @default(now())
+
+  // --- Presión arterial: hasta 3 tomas por brazo ---
+  /// Arreglo JSON: [{ "systolic": 120, "diastolic": 80 }, ...]
+  bpRightArm Json?
+  bpLeftArm  Json?
+  /// Promedios calculados automáticamente.
+  bpRightAvgSystolic  Int?
+  bpRightAvgDiastolic Int?
+  bpLeftAvgSystolic   Int?
+  bpLeftAvgDiastolic  Int?
+
+  // --- Pulso: hasta 3 tomas ---
+  /// Arreglo JSON de números: [72, 75, 74]
+  pulseReadings Json?
+  pulseAvg      Int?
+
+  // --- Antropometría ---
+  weightKg Float?
+  heightCm Float?
+  bmi           Float?
+  /// Clasificación en adultos (ej. "Normal", "Sobrepeso").
+  bmiCategory   String?
+  /// En pediátricos (2-20 años): percentil y puntaje-z BMI-para-edad (CDC).
+  bmiPercentile Float?
+  bmiZScore     Float?
+
+  // --- Otros signos ---
+  oxygenSaturation Int?    //  % SpO2
+  temperatureC     Float?  //  temperatura canónica en Celsius
+  /// Resultado del "Fit profile" (texto libre por ahora).
+  fitProfile       String?
+
+  // --- Alertas de valores pánico ---
+  /// true si algún valor cruzó un umbral crítico.
+  hasPanicValue Boolean @default(false)
+  /// Detalle de las alertas: [{ "type": "BP", "value": "185/120", "message": "..." }]
+  panicFlags    Json?
+
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([patientId, recordedAt])
+}
+
+// ----------------------------------------------------------------------------
+//  NOTAS CLÍNICAS / CHARTS (Fase 1)
+// ----------------------------------------------------------------------------
+
+/// Plantilla de nota por disciplina. Define las "secciones" a documentar.
+/// El esquema (schema) es JSON con la lista de secciones y su tipo, por ej.:
+///   { "sections": [ { "key":"subjetivo", "title":"Subjetivo", "type":"textarea" },
+///                    { "key":"dolor", "title":"Mapa de dolor", "type":"bodyMap" } ] }
+/// Tipos de sección soportados: text, textarea, foodPrescription, bodyMap, followUp.
+model NoteTemplate {
+  id          String      @id @default(cuid())
+  /// Disciplina a la que aplica (null = general, usable por cualquiera).
+  discipline  Discipline?
+  name        String
+  description String?
+  schema      Json
+  /// true si es una plantilla del sistema (predefinida), false si la creó un usuario.
+  isSystem    Boolean     @default(false)
+  createdById String?
+  isActive    Boolean     @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  notes ClinicalNote[]
+
+  @@index([discipline])
+}
+
+/// Una nota clínica de un paciente. La crea y firma un profesional/estudiante.
+/// Reglas de firma:
+///  - Solo el AUTOR puede firmar su nota.
+///  - Al firmar, la nota se BLOQUEA (status SIGNED) y se guarda una versión.
+///  - Editar una nota firmada crea una ENMIENDA: nueva versión con motivo,
+///    conservando todo el historial (nunca se pierde lo anterior).
+model ClinicalNote {
+  id        String  @id @default(cuid())
+  patientId String
+  patient   Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  /// Autor (único que puede firmar). Relación con User.
+  authorId String
+  author   User   @relation("AuthoredNotes", fields: [authorId], references: [id])
+
+  templateId String?
+  template   NoteTemplate? @relation(fields: [templateId], references: [id])
+
+  title   String
+  /// Contenido actual, con una entrada por sección: { "seccionKey": valor }.
+  content Json
+
+  status      NoteStatus @default(DRAFT)
+  version     Int        @default(1)
+  signedAt    DateTime?
+  /// Nombre del firmante guardado como texto (para el registro).
+  signedByName String?
+  signedById   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  versions NoteVersion[]
+
+  @@index([patientId, createdAt])
+  @@index([authorId])
+}
+
+/// Instantánea (snapshot) de una nota en cada firma/enmienda. Solo-inserción.
+model NoteVersion {
+  id     String       @id @default(cuid())
+  noteId String
+  note   ClinicalNote @relation(fields: [noteId], references: [id], onDelete: Cascade)
+
+  version      Int
+  content      Json
+  signedById   String
+  signedByName String
+  signedAt     DateTime @default(now())
+  /// Motivo del cambio (solo en enmiendas después de la primera firma).
+  changeReason String?
+
+  createdAt DateTime @default(now())
+
+  @@index([noteId, version])
+}
+
+// ----------------------------------------------------------------------------
+//  ARCHIVOS (Fase 1) — cifrados en disco (AES-256-GCM)
+// ----------------------------------------------------------------------------
+
+/// Metadatos de un archivo almacenado. El contenido NO va en la base de datos:
+/// se guarda cifrado en el almacenamiento (disco local en dev; S3 con BAA en
+/// producción). El "id" es la clave para recuperarlo.
+model StoredFile {
+  id           String @id @default(cuid())
+  mimeType     String
+  originalName String
+  /// Tamaño en bytes del archivo original (antes de cifrar).
+  size         Int
+  uploadedById String?
+
+  createdAt DateTime @default(now())
+
+  documents PatientDocument[]
+}
+
+/// Documento asociado a un paciente (laboratorio, resultado, plan médico, etc.).
+model PatientDocument {
+  id        String  @id @default(cuid())
+  patientId String
+  patient   Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  fileId String
+  file   StoredFile @relation(fields: [fileId], references: [id])
+
+  title    String
+  category DocumentCategory @default(OTHER)
+  uploadedById String?
+
+  createdAt DateTime @default(now())
+
+  @@index([patientId, category])
+}
+
+// ----------------------------------------------------------------------------
+//  PORTAL DEL PACIENTE (Fase 2)
+// ----------------------------------------------------------------------------
+
+/// Entrada del diario del paciente (síntomas, medicamentos, ánimo).
+model DiaryEntry {
+  id        String  @id @default(cuid())
+  patientId String
+  patient   Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  /// Fecha y hora del registro (elegidas por el paciente).
+  entryAt     DateTime @default(now())
+  symptoms    String?
+  /// Medicamentos o suplementos tomados.
+  medications String?
+  /// Estado de ánimo (texto: "muy bien", "bien", "regular", "mal", "muy mal").
+  mood        String?
+  notes       String?
+
+  createdAt DateTime @default(now())
+
+  @@index([patientId, entryAt])
+}
+
+/// Hilo de conversación entre el paciente y el equipo, con un asunto.
+model MessageThread {
+  id        String  @id @default(cuid())
+  patientId String
+  patient   Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  subject  String
+  category MessageCategory @default(GENERAL)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  messages Message[]
+
+  @@index([patientId, updatedAt])
+}
+
+/// Un mensaje dentro de un hilo.
+model Message {
+  id       String        @id @default(cuid())
+  threadId String
+  thread   MessageThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  senderId   String
+  /// Rol de quien envía (para distinguir paciente vs equipo en la UI).
+  senderRole UserRole
+  senderName String
+  body       String
+
+  createdAt DateTime @default(now())
+
+  @@index([threadId, createdAt])
+}
+
+// ----------------------------------------------------------------------------
+//  AGENDA Y CITAS (Fase 3)
+// ----------------------------------------------------------------------------
+
+/// Servicio ofrecido (para el Online Booking): nombre, duración y precio.
+model Service {
+  id          String      @id @default(cuid())
+  name        String
+  description String?
+  durationMin Int //         Duración en minutos
+  priceCents  Int? //        Precio en centavos (ej. 5000 = $50.00)
+  discipline  Discipline?
+  isActive    Boolean     @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  appointments Appointment[]
+}
+
+/// Disponibilidad semanal recurrente de un profesional.
+/// Ej: lunes (dayOfWeek=1) de 9:00 (540) a 17:00 (1020).
+model ProviderAvailability {
+  id         String @id @default(cuid())
+  providerId String
+  provider   User   @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  /// 0=domingo ... 6=sábado.
+  dayOfWeek   Int
+  /// Minutos desde medianoche (hora local del consultorio).
+  startMinute Int
+  endMinute   Int
+
+  createdAt DateTime @default(now())
+
+  @@index([providerId, dayOfWeek])
+}
+
+/// Bloqueo de agenda: vacaciones, enfermedad, festivo o break.
+model TimeOff {
+  id         String @id @default(cuid())
+  providerId String
+  provider   User   @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  type    TimeOffType
+  startAt DateTime
+  endAt   DateTime
+  note    String?
+
+  createdAt DateTime @default(now())
+
+  @@index([providerId, startAt])
+}
+
+/// Una cita agendada entre un paciente y un profesional.
+model Appointment {
+  id         String @id @default(cuid())
+  providerId String
+  provider   User   @relation("ProviderAppointments", fields: [providerId], references: [id])
+
+  patientId String
+  patient   Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  serviceId String?
+  service   Service? @relation(fields: [serviceId], references: [id])
+
+  startAt DateTime
+  endAt   DateTime
+  status  AppointmentStatus @default(REQUESTED)
+  type    AppointmentType   @default(IN_PERSON)
+
+  /// Nota del paciente al agendar / motivo.
+  reason       String?
+  /// Nota interna del equipo.
+  staffNote    String?
+  createdById  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([providerId, startAt])
+  @@index([patientId, startAt])
+  @@index([status])
+}
+
+// ----------------------------------------------------------------------------
+//  ÓRDENES: LABORATORIOS Y MEDICAMENTOS (Fase 4)
+// ----------------------------------------------------------------------------
+
+/// Catálogo de pruebas de laboratorio (para el checklist).
+model LabTest {
+  id       String  @id @default(cuid())
+  code     String?
+  name     String
+  category String?
+  isActive Boolean @default(true)
+
+  @@index([category])
+}
+
+/// Orden de laboratorio: el profesional selecciona pruebas de un checklist.
+model LabOrder {
+  id        String @id @default(cuid())
+  patientId String
+  patient   Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  orderedById   String?
+  orderedByName String?
+  status        LabOrderStatus @default(ORDERED)
+  notes         String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  items LabOrderItem[]
+
+  @@index([patientId, createdAt])
+}
+
+/// Cada prueba dentro de una orden (se guarda el nombre como snapshot).
+model LabOrderItem {
+  id      String   @id @default(cuid())
+  orderId String
+  order   LabOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  name    String
+  code    String?
+}
+
+/// Orden de medicamento (receta). Debe firmarla el prescriptor con su
+/// credencial (contraseña). Solo profesionales con NPI que pueden recetar.
+model MedicationOrder {
+  id        String @id @default(cuid())
+  patientId String
+  patient   Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  prescriberId   String?
+  prescriberName String?
+
+  drugName     String
+  dose         String //  ej. "500 mg"
+  route        String? // ej. "oral"
+  frequency    String //  ej. "cada 8 horas"
+  durationDays Int?
+  quantity     String? // ej. "30 tabletas"
+  refills      Int     @default(0)
+  instructions String?
+
+  status   MedicationOrderStatus @default(DRAFT)
+  signedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([patientId, createdAt])
+}
+
+// ----------------------------------------------------------------------------
+//  CONSENTIMIENTOS Y EVALUACIÓN INICIAL (Fase 6)
+// ----------------------------------------------------------------------------
+
+/// Texto y versión de un documento de consentimiento (una versión activa por
+/// tipo). El texto legal definitivo lo provee el abogado/consultor HIPAA.
+model ConsentDocument {
+  id       String      @id @default(cuid())
+  type     ConsentType
+  version  String
+  title    String
+  body     String
+  isActive Boolean     @default(true)
+
+  createdAt DateTime @default(now())
+
+  consents Consent[]
+
+  @@index([type, isActive])
+}
+
+/// Notificación para un usuario (recordatorio, cumpleaños, etc.).
+/// Se entrega en la bandeja de la app; el mismo registro puede enviarse por
+/// email/SMS cuando se conecte un proveedor con BAA.
+model Notification {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  type  NotificationType
+  title String
+  body  String
+  /// Id de la entidad relacionada (cita, paciente, etc.).
+  relatedId String?
+  /// Clave para evitar duplicados (ej. "reminder-<citaId>", "bday-<userId>-2026").
+  dedupeKey String? @unique
+
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, createdAt])
+}
+
+/// Evaluación inicial del paciente. Según las respuestas, el sistema puede
+/// asignar automáticamente consentimientos adicionales.
+model InitialAssessment {
+  id        String  @id @default(cuid())
+  patientId String
+  patient   Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  /// Respuestas en formato { "preguntaKey": valor }.
+  answers   Json
+  /// Resumen de acciones automáticas (ej. consentimientos asignados).
+  triggered Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([patientId, createdAt])
+}

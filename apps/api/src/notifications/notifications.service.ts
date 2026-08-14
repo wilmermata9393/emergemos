@@ -1,0 +1,79 @@
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { NotificationType } from '@prisma/client';
+import { PrismaService } from '../prisma/prisma.service';
+
+interface NotifyInput {
+  userId: string;
+  type: NotificationType;
+  title: string;
+  body: string;
+  relatedId?: string;
+  /// Si se repite, no crea duplicado.
+  dedupeKey?: string;
+}
+
+@Injectable()
+export class NotificationsService {
+  private readonly logger = new Logger(NotificationsService.name);
+
+  constructor(private readonly prisma: PrismaService) {}
+
+  /// Crea una notificación (canal in-app) y la despacha a canales externos.
+  async notify(input: NotifyInput) {
+    if (input.dedupeKey) {
+      const existing = await this.prisma.notification.findUnique({ where: { dedupeKey: input.dedupeKey } });
+      if (existing) return existing; // ya se envió, no duplicar
+    }
+
+    const notification = await this.prisma.notification.create({
+      data: {
+        userId: input.userId,
+        type: input.type,
+        title: input.title,
+        body: input.body,
+        relatedId: input.relatedId,
+        dedupeKey: input.dedupeKey,
+      },
+    });
+
+    // Canales externos (email/SMS): listos para conectar un proveedor con BAA.
+    await this.dispatchExternal(input.userId, input.title, input.body);
+    return notification;
+  }
+
+  /// Adaptadores de email/SMS. Hoy solo registran en consola (demo). En
+  /// producción, reemplazar por SendGrid/SES (email) y Twilio (SMS) con BAA.
+  private async dispatchExternal(userId: string, title: string, body: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { email: true, phone: true },
+    });
+    if (!user) return;
+    if (user.email) this.logger.log(`[EMAIL stub] a ${user.email}: ${title} — ${body}`);
+    if (user.phone) this.logger.log(`[SMS stub] a ${user.phone}: ${title}`);
+  }
+
+  listForUser(userId: string) {
+    return this.prisma.notification.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    });
+  }
+
+  async unreadCount(userId: string) {
+    const count = await this.prisma.notification.count({ where: { userId, readAt: null } });
+    return { count };
+  }
+
+  async markRead(id: string, userId: string) {
+    const n = await this.prisma.notification.findUnique({ where: { id } });
+    if (!n || n.userId !== userId) throw new NotFoundException('Notificación no encontrada.');
+    return this.prisma.notification.update({ where: { id }, data: { readAt: new Date() } });
+  }
+
+  async markAllRead(userId: string) {
+    await this.prisma.notification.updateMany({ where: { userId, readAt: null }, data: { readAt: new Date() } });
+    return { ok: true };
+  }
+}

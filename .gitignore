@@ -1,0 +1,40 @@
+# Dependencias
+node_modules/
+.pnp
+.pnp.js
+
+# Variables de entorno — NUNCA subir secretos ni datos de pacientes
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# Builds
+dist/
+build/
+.next/
+out/
+*.tsbuildinfo
+
+# Prisma
+packages/database/prisma/*.db
+packages/database/generated/
+
+# Logs
+*.log
+npm-debug.log*
+logs/
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+
+# Editores
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# Archivos de pacientes / uploads (nunca en el repo)
+uploads/
+storage/
