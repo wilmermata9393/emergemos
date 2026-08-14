@@ -160,6 +160,14 @@ export default function SchedulePage() {
     catch (e: any) { setError(e.message); }
   }
 
+  /// Rechaza (elimina) una solicitud de cita express que no se acepta.
+  async function rejectAppt(id: string) {
+    setError('');
+    if (!window.confirm('¿Rechazar y eliminar esta solicitud de cita? No se puede deshacer.')) return;
+    try { await api.del(`/appointments/${id}`); await loadAgenda(); }
+    catch (e: any) { setError(e.message); }
+  }
+
   return (
     <AppShell>
       <h1 className="mb-6 text-2xl font-bold">{isProvider ? 'Mi agenda' : 'Agenda de la clínica'}</h1>
@@ -284,8 +292,9 @@ export default function SchedulePage() {
                 <span className="text-slate-500"> · {a.service?.name ?? 'Consulta'} · {STATUS[a.status] ?? a.status}</span>
               </div>
               <div className="flex gap-2">
-                {isVideo(a.type) && a.status !== 'CANCELLED' && <a href={`/call/${a.id}`} className="btn-primary !px-3 !py-1.5 text-sm">🎥 Unirse</a>}
-                {a.status !== 'CONFIRMED' && a.status !== 'CANCELLED' && <button className="btn-ghost !px-3 !py-1.5 text-sm" onClick={() => apptAction(a.id, 'confirm')}>Confirmar</button>}
+                {isVideo(a.type) && a.status !== 'CANCELLED' && <a href={`/call/${a.id}`} className="btn-primary !px-3 !py-1.5 text-sm">🎥 Iniciar video</a>}
+                {a.status !== 'CONFIRMED' && a.status !== 'CANCELLED' && <button className="btn-ghost !px-3 !py-1.5 text-sm" onClick={() => apptAction(a.id, 'confirm')}>{a.status === 'REQUESTED' ? 'Aceptar' : 'Confirmar'}</button>}
+                {a.status === 'REQUESTED' && <button className="btn-ghost !px-3 !py-1.5 text-sm text-danger-600" onClick={() => rejectAppt(a.id)}>Rechazar</button>}
                 {a.status !== 'COMPLETED' && a.status !== 'CANCELLED' && <button className="btn-ghost !px-3 !py-1.5 text-sm" onClick={() => apptAction(a.id, 'complete')}>Realizada</button>}
                 {a.status !== 'CANCELLED' && <button className="btn-ghost !px-3 !py-1.5 text-sm" onClick={() => apptAction(a.id, 'cancel')}>Cancelar</button>}
               </div>

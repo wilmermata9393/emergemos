@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Query } from '@nestjs/common';
 import { AppointmentStatus, AuditAction, UserRole } from '@prisma/client';
 import { SchedulingService } from './scheduling.service';
 import { BookAppointmentDto, RescheduleDto } from './dto/scheduling.dto';
@@ -58,5 +58,13 @@ export class AppointmentsController {
   @Post(':id/reschedule')
   reschedule(@Param('id') id: string, @Body() dto: RescheduleDto) {
     return this.scheduling.reschedule(id, dto.startAt);
+  }
+
+  /// Rechazar/eliminar una cita (Cita Express no aceptada). Se borra del sistema.
+  @Roles(UserRole.ADMIN, UserRole.STAFF, UserRole.PROVIDER)
+  @Audit(AuditAction.DELETE, 'Appointment')
+  @Delete(':id')
+  remove(@Param('id') id: string) {
+    return this.scheduling.remove(id);
   }
 }

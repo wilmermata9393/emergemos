@@ -22,6 +22,7 @@ const BASE_NAV = [
   { href: '/schedule', label: 'Mi agenda' },
   { href: '/messages', label: '💬 Mensajes' },
   { href: '/notifications', label: '🔔 Avisos' },
+  { href: '/profile', label: '👤 Mi perfil' },
 ];
 const ADMIN_NAV = [
   { href: '/admin', label: '⚙️ Administración' },

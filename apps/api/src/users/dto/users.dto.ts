@@ -37,3 +37,20 @@ export class UpdateUserDto {
   @IsOptional() @IsString() bio?: string;
   @IsOptional() @IsString() licenseNumber?: string;
 }
+
+/// Lo que un profesional/miembro del equipo edita de SU PROPIO perfil.
+/// (No incluye rol ni permiso de recetar: eso lo controla el administrador.)
+export class UpdateOwnProfileDto {
+  @IsOptional() @IsString() firstName?: string;
+  @IsOptional() @IsString() lastName?: string;
+  @IsOptional() @Matches(/^\+[1-9]\d{6,14}$/, { message: 'Teléfono en formato internacional, ej. +17875551234' })
+  phone?: string;
+  @IsOptional() @IsEmail() email?: string;
+  @IsOptional() @IsString() pronoun?: string;
+
+  @IsOptional() @IsEnum(Discipline) discipline?: Discipline;
+  @IsOptional() @IsString() npi?: string;
+  @IsOptional() @IsString() displayTitle?: string;
+  @IsOptional() @IsString() bio?: string;
+  @IsOptional() @IsString() licenseNumber?: string;
+}

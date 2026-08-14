@@ -99,12 +99,11 @@ export class SignalingGateway implements OnGatewayConnection, OnGatewayDisconnec
       },
     });
     if (!appt) return;
-    const isPatient = user.id === appt.patient.userId;
-    const isProvider = user.id === appt.providerId;
+    // Solo el equipo clínico inicia la videollamada; el paciente nunca timbra.
     const clinical: UserRole[] = [UserRole.ADMIN, UserRole.STAFF, UserRole.PROVIDER, UserRole.STUDENT];
-    if (!isPatient && !isProvider && !clinical.includes(user.role)) return;
-    // El paciente timbra al profesional; el equipo/profesional timbra al paciente.
-    const targetUserId = isPatient ? appt.providerId : appt.patient.userId;
+    if (!clinical.includes(user.role)) return;
+    // El profesional/equipo timbra al paciente de la cita.
+    const targetUserId = appt.patient.userId;
     this.server.to(`user:${targetUserId}`).emit('incoming-call', {
       appointmentId: appt.id,
       from: user.name,

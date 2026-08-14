@@ -162,9 +162,11 @@ export class SchedulingService {
   async book(dto: BookAppointmentDto, patientId: string, createdById: string, bookedByStaff: boolean) {
     const startAt = new Date(dto.startAt);
     if (isNaN(startAt.getTime())) throw new BadRequestException('Fecha/hora inválida.');
-    const duration = dto.serviceId
+    let duration = dto.serviceId
       ? (await this.prisma.service.findUnique({ where: { id: dto.serviceId } }))?.durationMin ?? DEFAULT_DURATION
       : DEFAULT_DURATION;
+    // Las "Citas Express" del paciente duran como máximo 30 minutos.
+    if (!bookedByStaff) duration = Math.min(duration, 30);
     const endAt = new Date(startAt.getTime() + duration * 60000);
 
     await this.assertFree(dto.providerId, startAt, endAt);
@@ -251,6 +253,15 @@ export class SchedulingService {
     const appt = await this.prisma.appointment.findUnique({ where: { id } });
     if (!appt) throw new NotFoundException('Cita no encontrada.');
     return this.prisma.appointment.update({ where: { id }, data: { status } });
+  }
+
+  /// Rechaza/elimina una cita (p. ej. una Cita Express que el profesional no acepta).
+  /// Se borra del sistema porque no llegó a concretarse.
+  async remove(id: string) {
+    const appt = await this.prisma.appointment.findUnique({ where: { id } });
+    if (!appt) throw new NotFoundException('Cita no encontrada.');
+    await this.prisma.appointment.delete({ where: { id } });
+    return { ok: true, deleted: id };
   }
 
   async reschedule(id: string, startAtStr: string) {

@@ -2,7 +2,7 @@ import { Injectable, ConflictException, NotFoundException, BadRequestException }
 import { Prisma, UserRole } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service';
-import { CreateUserDto, UpdateUserDto } from './dto/users.dto';
+import { CreateUserDto, UpdateUserDto, UpdateOwnProfileDto } from './dto/users.dto';
 
 const STAFF_ROLES: UserRole[] = [UserRole.ADMIN, UserRole.STAFF, UserRole.STUDENT, UserRole.PROVIDER];
 
@@ -95,6 +95,57 @@ export class UsersService {
           : {}),
       },
       select: { id: true, firstName: true, lastName: true, role: true },
+    });
+  }
+
+  /// Perfil propio del profesional/equipo (para su página "Mi perfil").
+  async myProfile(userId: string) {
+    const u = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true, role: true, firstName: true, lastName: true, phone: true, email: true, pronoun: true,
+        providerProfile: { select: { discipline: true, npi: true, hasNpi: true, canPrescribe: true, displayTitle: true, bio: true, licenseNumber: true } },
+      },
+    });
+    if (!u) throw new NotFoundException('Usuario no encontrado.');
+    return u;
+  }
+
+  /// El profesional edita SU PROPIO perfil (incluye teléfono; NO rol ni canPrescribe).
+  async updateOwn(userId: string, dto: UpdateOwnProfileDto) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, include: { providerProfile: true } });
+    if (!user) throw new NotFoundException('Usuario no encontrado.');
+
+    if (dto.phone && dto.phone !== user.phone) {
+      const clash = await this.prisma.user.findUnique({ where: { phone: dto.phone } });
+      if (clash) throw new ConflictException('Ya existe una cuenta con ese teléfono.');
+    }
+
+    const hasProviderFields =
+      dto.discipline !== undefined || dto.npi !== undefined ||
+      dto.displayTitle !== undefined || dto.bio !== undefined || dto.licenseNumber !== undefined;
+    // No tocar canPrescribe aquí (lo controla el admin).
+    const provData: Record<string, unknown> = {
+      discipline: dto.discipline,
+      displayTitle: dto.displayTitle,
+      bio: dto.bio,
+      licenseNumber: dto.licenseNumber,
+      ...(dto.npi !== undefined ? { npi: dto.npi || null, hasNpi: !!dto.npi } : {}),
+    };
+
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        firstName: dto.firstName,
+        lastName: dto.lastName,
+        email: dto.email,
+        pronoun: dto.pronoun,
+        ...(dto.phone ? { phone: dto.phone } : {}),
+        ...(hasProviderFields
+          ? { providerProfile: user.providerProfile ? { update: provData } : { create: provData as any } }
+          : {}),
+      },
+      select: { id: true, firstName: true, lastName: true },
     });
   }
 
