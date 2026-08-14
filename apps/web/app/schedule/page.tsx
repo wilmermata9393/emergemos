@@ -19,6 +19,11 @@ const STATUS: Record<string, string> = {
 
 const toTime = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
 const toMin = (t: string) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+// ISO (UTC) → valor para <input type="datetime-local"> en hora local.
+const toLocalInput = (iso: string) => {
+  const d = new Date(iso);
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+};
 
 interface Row { dayOfWeek: number; start: string; end: string }
 interface TimeOff { id: string; type: string; startAt: string; endAt: string; note?: string | null }
@@ -62,6 +67,7 @@ export default function SchedulePage() {
   const [bServiceId, setBServiceId] = useState('');
   const [bType, setBType] = useState('IN_PERSON');
   const [bDate, setBDate] = useState('');
+  const [bWhen, setBWhen] = useState(''); // fecha y hora exacta (datetime-local)
   const [bSlots, setBSlots] = useState<string[]>([]);
   const [bReason, setBReason] = useState('');
 
@@ -120,8 +126,8 @@ export default function SchedulePage() {
         serviceId: bServiceId || undefined, startAt: slot, type: bType, reason: bReason,
       });
       setMsg('¡Cita agendada! Aparece abajo en la agenda del día.');
-      setAgendaDate(bDate); // salta la agenda al día agendado para que se vea
-      setBReason('');
+      setAgendaDate(toLocalInput(slot).slice(0, 10)); // salta la agenda al día agendado para que se vea
+      setBReason(''); setBWhen('');
       await loadBookSlots(); // refresca horarios (quita el que se ocupó)
     } catch (e: any) { setError(e.message); }
   }
@@ -227,17 +233,31 @@ export default function SchedulePage() {
 
             {bDate && (
               <div>
-                <p className="label">Horarios disponibles</p>
-                {bSlots.length === 0 && <p className="text-slate-500">No hay horarios ese día. Revisa la disponibilidad del profesional (en su "Mi agenda") o prueba otra fecha. La doctora de ejemplo atiende de lunes a viernes.</p>}
+                <p className="label">Horarios sugeridos (según disponibilidad del profesional)</p>
+                {bSlots.length === 0 && <p className="mb-2 text-sm text-slate-500">Sin horarios sugeridos ese día (la doctora de ejemplo atiende L–V). Puedes igualmente fijar la fecha y hora manualmente abajo. 👇</p>}
                 <div className="flex flex-wrap gap-2">
                   {bSlots.map((s) => (
-                    <button key={s} onClick={() => bookAppt(s)} className="rounded-xl border border-brand-200 bg-brand-50 px-4 py-2 font-semibold text-brand-700 hover:bg-brand-100">
+                    <button key={s} type="button" onClick={() => setBWhen(toLocalInput(s))} className={`rounded-xl border px-4 py-2 font-semibold ${bWhen === toLocalInput(s) ? 'border-brand-500 bg-brand-100 text-brand-800' : 'border-brand-200 bg-brand-50 text-brand-700 hover:bg-brand-100'}`}>
                       {new Date(s).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })}
                     </button>
                   ))}
                 </div>
               </div>
             )}
+
+            {/* Fecha y hora final + guardar */}
+            <div className="rounded-xl bg-mist/60 p-4">
+              <label className="label">Fecha y hora de la cita</label>
+              <input type="datetime-local" className="field !w-auto" value={bWhen} onChange={(e) => setBWhen(e.target.value)} />
+              <button
+                className="btn-primary ml-0 mt-3 block sm:ml-3 sm:mt-0 sm:inline-block"
+                disabled={!bPatient || !bWhen}
+                onClick={() => bookAppt(new Date(bWhen).toISOString())}
+              >
+                Agendar cita
+              </button>
+              {(!bPatient || !bWhen) && <p className="mt-2 text-sm text-slate-500">Elige un paciente y una fecha/hora para poder agendar.</p>}
+            </div>
           </div>
         )}
       </div>

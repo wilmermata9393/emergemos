@@ -92,6 +92,12 @@ async function request<T>(path: string, options: RequestInit = {}, _retried = fa
 
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
+    // Sesión caducada y sin poder renovar: limpia y manda a iniciar sesión
+    // (evita el confuso "Unauthorized" a mitad de una acción).
+    if (res.status === 401 && _retried && typeof window !== 'undefined' && path !== '/auth/refresh') {
+      clearSession();
+      window.location.href = '/login';
+    }
     const message = (data as any)?.message ?? 'Error de conexión';
     throw new ApiError(res.status, Array.isArray(message) ? message.join(', ') : message);
   }
