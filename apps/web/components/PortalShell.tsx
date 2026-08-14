@@ -7,6 +7,7 @@ import { getToken, getUser, clearSession } from '@/lib/api';
 import { useIdleLogout } from '@/lib/useIdleLogout';
 import Logo from '@/components/Logo';
 import IncomingCall from '@/components/IncomingCall';
+import NotificationWatcher from '@/components/NotificationWatcher';
 
 const NAV = [
   { href: '/portal', label: 'Inicio', icon: '🏠' },
@@ -27,7 +28,14 @@ export default function PortalShell({ children }: { children: React.ReactNode })
   const pathname = usePathname();
   const [ready, setReady] = useState(false);
   const [name, setName] = useState('');
+  const [unread, setUnread] = useState(0);
   useIdleLogout();
+
+  useEffect(() => {
+    const h = (e: Event) => setUnread((e as CustomEvent).detail ?? 0);
+    window.addEventListener('rme-unread', h);
+    return () => window.removeEventListener('rme-unread', h);
+  }, []);
 
   useEffect(() => {
     if (!getToken()) { router.replace('/login'); return; }
@@ -67,6 +75,9 @@ export default function PortalShell({ children }: { children: React.ReactNode })
                 }`}
               >
                 <span className="text-xl">{n.icon}</span> {n.label}
+                {n.href === '/portal/notifications' && unread > 0 && (
+                  <span className="inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-accent-600 px-1.5 py-0.5 text-xs font-bold text-white">{unread}</span>
+                )}
               </Link>
             );
           })}
@@ -74,6 +85,7 @@ export default function PortalShell({ children }: { children: React.ReactNode })
       </header>
       <main className="mx-auto max-w-3xl px-4 py-8">{children}</main>
       <IncomingCall />
+      <NotificationWatcher />
     </div>
   );
 }

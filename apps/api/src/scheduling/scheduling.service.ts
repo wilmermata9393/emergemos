@@ -4,7 +4,7 @@ import {
   BadRequestException,
   ForbiddenException,
 } from '@nestjs/common';
-import { AppointmentStatus, AppointmentType, Prisma, TimeOffType, UserRole } from '@prisma/client';
+import { AppointmentStatus, AppointmentType, NotificationType, Prisma, TimeOffType, UserRole } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   CreateServiceDto,
@@ -171,7 +171,7 @@ export class SchedulingService {
 
     await this.assertFree(dto.providerId, startAt, endAt);
 
-    return this.prisma.appointment.create({
+    const appt = await this.prisma.appointment.create({
       data: {
         providerId: dto.providerId,
         patientId,
@@ -186,6 +186,25 @@ export class SchedulingService {
       },
       include: { service: true, provider: { select: { firstName: true, lastName: true } } },
     });
+
+    // Si la solicita el paciente, avisar al profesional para que la acepte/rechace.
+    if (!bookedByStaff) {
+      const patient = await this.prisma.patient.findUnique({
+        where: { id: patientId }, include: { user: { select: { firstName: true, lastName: true } } },
+      });
+      const when = startAt.toLocaleString('es', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
+      const who = patient ? `${patient.user.firstName} ${patient.user.lastName}` : 'Un paciente';
+      await this.prisma.notification.create({
+        data: {
+          userId: dto.providerId,
+          type: NotificationType.APPOINTMENT_REMINDER,
+          title: '⚡ Nueva solicitud de Cita Express',
+          body: `${who} solicitó una cita (${appt.service?.name ?? 'consulta'}) para el ${when}. Ábrela en tu agenda para aceptarla o rechazarla.`,
+          relatedId: appt.id,
+        },
+      });
+    }
+    return appt;
   }
 
   listForProvider(providerId: string, from: string, to: string) {

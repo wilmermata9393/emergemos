@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
-import { MessageCategory, UserRole } from '@prisma/client';
+import { MessageCategory, NotificationType, UserRole } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 interface Sender {
@@ -16,6 +16,36 @@ export class MessagesService {
     return u ? `${u.firstName} ${u.lastName}` : 'Desconocido';
   }
 
+  /// Crea avisos por un mensaje nuevo: si escribe el paciente, avisa al equipo;
+  /// si escribe el equipo, avisa al paciente.
+  private async notifyNewMessage(threadId: string, sender: Sender, senderName: string, body: string) {
+    const preview = body.length > 80 ? `${body.slice(0, 80)}…` : body;
+    if (sender.role === UserRole.PATIENT) {
+      const staff = await this.prisma.user.findMany({
+        where: { isActive: true, role: { in: [UserRole.ADMIN, UserRole.STAFF, UserRole.PROVIDER] } },
+        select: { id: true },
+      });
+      await this.prisma.notification.createMany({
+        data: staff.map((s) => ({
+          userId: s.id, type: NotificationType.MESSAGE,
+          title: 'Nuevo mensaje de un paciente', body: `${senderName}: ${preview}`, relatedId: threadId,
+        })),
+      });
+    } else {
+      const thread = await this.prisma.messageThread.findUnique({
+        where: { id: threadId }, include: { patient: { select: { userId: true } } },
+      });
+      if (thread) {
+        await this.prisma.notification.create({
+          data: {
+            userId: thread.patient.userId, type: NotificationType.MESSAGE,
+            title: 'Nuevo mensaje de tu equipo de salud', body: `${senderName}: ${preview}`, relatedId: threadId,
+          },
+        });
+      }
+    }
+  }
+
   /// Crea un hilo nuevo con su primer mensaje.
   async createThread(
     patientId: string,
@@ -23,7 +53,7 @@ export class MessagesService {
     data: { subject: string; category: MessageCategory; body: string },
   ) {
     const senderName = await this.name(sender.id);
-    return this.prisma.messageThread.create({
+    const thread = await this.prisma.messageThread.create({
       data: {
         patientId,
         subject: data.subject,
@@ -39,6 +69,8 @@ export class MessagesService {
       },
       include: { messages: true },
     });
+    await this.notifyNewMessage(thread.id, sender, senderName, data.body);
+    return thread;
   }
 
   /// Bandeja del equipo: TODOS los hilos, con paciente y último mensaje.
@@ -94,6 +126,7 @@ export class MessagesService {
       },
     });
     await this.prisma.messageThread.update({ where: { id: threadId }, data: { updatedAt: new Date() } });
+    await this.notifyNewMessage(threadId, sender, senderName, body);
     return this.getThread(threadId);
   }
 }

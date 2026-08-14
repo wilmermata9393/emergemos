@@ -88,7 +88,6 @@ export default function StaffProfilePage() {
           <div><label className="label">Apellido</label><input className="field" value={lastName} onChange={(e) => setLastName(e.target.value)} /></div>
           <div><label className="label">Teléfono</label><input className="field" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+17875551234" /></div>
           <div><label className="label">Correo</label><input className="field" value={email} onChange={(e) => setEmail(e.target.value)} /></div>
-          <div><label className="label">Pronombre</label><input className="field" value={pronoun} onChange={(e) => setPronoun(e.target.value)} placeholder="ella / él / elle" /></div>
         </div>
 
         {isProfessional && (

@@ -2,10 +2,12 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useEffect, useState } from 'react';
 import { useRequireAuth } from '@/lib/useAuth';
 import { useIdleLogout } from '@/lib/useIdleLogout';
 import Logo from '@/components/Logo';
 import IncomingCall from '@/components/IncomingCall';
+import NotificationWatcher from '@/components/NotificationWatcher';
 
 const ROLE_LABEL: Record<string, string> = {
   ADMIN: 'Administrador',
@@ -32,6 +34,14 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const { user, ready, logout } = useRequireAuth();
   const pathname = usePathname();
   useIdleLogout();
+
+  // Contador de avisos no leídos (lo publica NotificationWatcher).
+  const [unread, setUnread] = useState(0);
+  useEffect(() => {
+    const h = (e: Event) => setUnread((e as CustomEvent).detail ?? 0);
+    window.addEventListener('rme-unread', h);
+    return () => window.removeEventListener('rme-unread', h);
+  }, []);
 
   if (!ready) {
     return (
@@ -63,15 +73,19 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             <Link
               key={n.href}
               href={n.href}
-              className={`shrink-0 rounded-lg px-3 py-2 text-sm font-semibold ${pathname === n.href || (n.href !== '/dashboard' && pathname?.startsWith(n.href)) ? 'bg-brand-50 text-brand-700' : 'text-slate-600 hover:bg-slate-100'}`}
+              className={`relative shrink-0 rounded-lg px-3 py-2 text-sm font-semibold ${pathname === n.href || (n.href !== '/dashboard' && pathname?.startsWith(n.href)) ? 'bg-brand-50 text-brand-700' : 'text-slate-600 hover:bg-slate-100'}`}
             >
               {n.label}
+              {n.href === '/notifications' && unread > 0 && (
+                <span className="ml-1 inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-accent-600 px-1.5 py-0.5 text-xs font-bold text-white">{unread}</span>
+              )}
             </Link>
           ))}
         </nav>
       </header>
       <main className="mx-auto max-w-5xl px-4 py-8">{children}</main>
       <IncomingCall />
+      <NotificationWatcher />
     </div>
   );
 }
