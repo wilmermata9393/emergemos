@@ -23,7 +23,11 @@ function Flower({ size = 30 }: { size?: number }) {
   );
 }
 
-const IMG_HEIGHT = { sm: 32, md: 44, lg: 72 };
+// Alto visible del logo (ya recortado) por tamaño.
+const IMG_HEIGHT = { sm: 34, md: 46, lg: 64 };
+// El PNG oficial es casi cuadrado con mucho espacio en blanco arriba/abajo;
+// mostramos solo la franja horizontal central recortando con object-fit.
+const CROP_RATIO = 4.6; // ancho : alto de la franja visible
 
 export default function Logo({
   size = 'md',
@@ -36,16 +40,19 @@ export default function Logo({
 }) {
   const [imgOk, setImgOk] = useState(true);
 
-  // Logo oficial (si el archivo existe en /public/logo.png).
+  // Logo oficial horizontal (si el archivo existe en /public/logo-wide.png).
   if (imgOk) {
+    const h = IMG_HEIGHT[size];
     return (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img
-        src="/logo.png"
-        alt="emergemos · Medicina Integrativa"
-        style={{ height: IMG_HEIGHT[size], width: 'auto' }}
-        onError={() => setImgOk(false)}
-      />
+      <div style={{ height: h, width: h * CROP_RATIO, overflow: 'hidden' }} className="shrink-0">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/logo-wide.png"
+          alt="emergemos · Medicina Integrativa"
+          style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 47%' }}
+          onError={() => setImgOk(false)}
+        />
+      </div>
     );
   }
 
