@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { useRequireAuth } from '@/lib/useAuth';
 import { useIdleLogout } from '@/lib/useIdleLogout';
 import Logo from '@/components/Logo';
+import IncomingCall from '@/components/IncomingCall';
 
 const ROLE_LABEL: Record<string, string> = {
   ADMIN: 'Administrador',
@@ -68,6 +69,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         </nav>
       </header>
       <main className="mx-auto max-w-5xl px-4 py-8">{children}</main>
+      <IncomingCall />
     </div>
   );
 }

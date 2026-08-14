@@ -82,7 +82,12 @@ export default function CallPage() {
         socket = io(SOCKET_URL, { auth: { token: getToken() }, transports: ['websocket'] });
         socketRef.current = socket;
 
-        socket.on('ready', () => { setStatus('En la sala'); socket.emit('join', { roomId: room.roomId }); });
+        socket.on('ready', () => {
+          setStatus('En la sala');
+          socket.emit('join', { roomId: room.roomId });
+          // Timbrar al otro participante (llamada entrante con sonido).
+          socket.emit('ring', { appointmentId: id });
+        });
         socket.on('unauthorized', () => setError('Sesión inválida para el video.'));
         socket.on('join-denied', () => setError('No se pudo entrar a la sala.'));
 

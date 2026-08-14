@@ -6,9 +6,11 @@ import { useEffect, useState } from 'react';
 import { getToken, getUser, clearSession } from '@/lib/api';
 import { useIdleLogout } from '@/lib/useIdleLogout';
 import Logo from '@/components/Logo';
+import IncomingCall from '@/components/IncomingCall';
 
 const NAV = [
   { href: '/portal', label: 'Inicio', icon: '🏠' },
+  { href: '/portal/profile', label: 'Mi perfil', icon: '👤' },
   { href: '/portal/notifications', label: 'Avisos', icon: '🔔' },
   { href: '/portal/appointments', label: 'Citas', icon: '📅' },
   { href: '/portal/prescriptions', label: 'Recetas y labs', icon: '💊' },
@@ -71,6 +73,7 @@ export default function PortalShell({ children }: { children: React.ReactNode })
         </nav>
       </header>
       <main className="mx-auto max-w-3xl px-4 py-8">{children}</main>
+      <IncomingCall />
     </div>
   );
 }

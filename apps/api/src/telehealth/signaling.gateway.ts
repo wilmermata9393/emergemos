@@ -45,6 +45,8 @@ export class SignalingGateway implements OnGatewayConnection, OnGatewayDisconnec
       const user = await this.prisma.user.findUnique({ where: { id: payload.sub } });
       if (!user || !user.isActive) throw new Error('inactivo');
       client.data.user = { id: user.id, role: user.role, name: `${user.firstName} ${user.lastName}` } as SocketUser;
+      // Canal personal: permite "timbrar" a este usuario esté donde esté en la app.
+      await client.join(`user:${user.id}`);
       // Avisar que ya está autenticado: el cliente debe esperar esto antes de unirse.
       client.emit('ready');
     } catch {
@@ -81,6 +83,34 @@ export class SignalingGateway implements OnGatewayConnection, OnGatewayDisconnec
     // Avisar a los demás que llegó alguien.
     client.to(body.roomId).emit('peer-joined', { peerId: client.id, user });
     this.logger.log(`${user.name} entró a ${body.roomId} (${peers.length + 1} en sala)`);
+  }
+
+  /// "Timbrar" al otro participante de una cita: le llega una llamada entrante
+  /// (con sonido) esté en la pantalla que esté dentro de la app.
+  @SubscribeMessage('ring')
+  async onRing(@ConnectedSocket() client: Socket, @MessageBody() body: { appointmentId: string }) {
+    const user = client.data.user as SocketUser;
+    if (!user || !body?.appointmentId) return;
+    const appt = await this.prisma.appointment.findUnique({
+      where: { id: body.appointmentId },
+      include: {
+        patient: { select: { userId: true } },
+        service: { select: { name: true } },
+      },
+    });
+    if (!appt) return;
+    const isPatient = user.id === appt.patient.userId;
+    const isProvider = user.id === appt.providerId;
+    const clinical: UserRole[] = [UserRole.ADMIN, UserRole.STAFF, UserRole.PROVIDER, UserRole.STUDENT];
+    if (!isPatient && !isProvider && !clinical.includes(user.role)) return;
+    // El paciente timbra al profesional; el equipo/profesional timbra al paciente.
+    const targetUserId = isPatient ? appt.providerId : appt.patient.userId;
+    this.server.to(`user:${targetUserId}`).emit('incoming-call', {
+      appointmentId: appt.id,
+      from: user.name,
+      service: appt.service?.name ?? 'Consulta',
+    });
+    this.logger.log(`${user.name} está timbrando la cita ${appt.id}`);
   }
 
   /// Relay de un mensaje de señalización a un peer específico.
