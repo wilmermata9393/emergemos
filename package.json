@@ -19,7 +19,7 @@
     "web:dev": "npm run dev --workspace @rme/web",
     "web:build": "npm run build --workspace @rme/web",
     "api:build:prod": "npm run db:generate && npm run api:build",
-    "start:prod": "npm run db:deploy && node apps/api/dist/main.js",
+    "start:prod": "npm run db:deploy && (npm run db:seed || true) && node apps/api/dist/main.js",
     "web:start": "npm run start --workspace @rme/web"
   },
   "engines": {
