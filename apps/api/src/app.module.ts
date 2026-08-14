@@ -21,6 +21,7 @@ import { TelehealthModule } from './telehealth/telehealth.module';
 import { ConsentsModule } from './consents/consents.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { UsersModule } from './users/users.module';
+import { CatalogModule } from './catalog/catalog.module';
 
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
@@ -52,6 +53,7 @@ import { AuditInterceptor } from './audit/audit.interceptor';
     ConsentsModule,
     NotificationsModule,
     UsersModule,
+    CatalogModule,
   ],
   providers: [
     // 0) Límite de peticiones por IP (anti-abuso / fuerza bruta).

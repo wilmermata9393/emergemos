@@ -5,6 +5,7 @@ import { api } from '@/lib/api';
 import AuthImage from './AuthImage';
 
 interface InsuranceCard { id: string; planName?: string | null; memberId?: string | null; frontImageKey?: string | null; backImageKey?: string | null; createdAt: string }
+interface Plan { id: string; name: string }
 interface Doc { id: string; title: string; category: string; createdAt: string; fileId: string; file: { mimeType: string; originalName: string } }
 
 const CATEGORIES = [
@@ -18,6 +19,7 @@ const CATEGORIES = [
 export default function PatientFiles({ patientId }: { patientId: string }) {
   const [cards, setCards] = useState<InsuranceCard[]>([]);
   const [docs, setDocs] = useState<Doc[]>([]);
+  const [plans, setPlans] = useState<Plan[]>([]);
   const [error, setError] = useState('');
 
   // Estado de subida del plan médico
@@ -41,7 +43,10 @@ export default function PatientFiles({ patientId }: { patientId: string }) {
     setCards(c);
     setDocs(d);
   }
-  useEffect(() => { load().catch((e) => setError(e.message)); }, [patientId]);
+  useEffect(() => {
+    load().catch((e) => setError(e.message));
+    api.get<Plan[]>('/insurance-plans').then(setPlans).catch(() => {});
+  }, [patientId]);
 
   async function uploadCard() {
     const front = frontRef.current?.files?.[0];
@@ -111,8 +116,14 @@ export default function PatientFiles({ patientId }: { patientId: string }) {
         )}
 
         <div className="grid gap-3 sm:grid-cols-2">
-          <div><label className="label">Nombre del plan</label><input className="field" value={planName} onChange={(e) => setPlanName(e.target.value)} /></div>
-          <div><label className="label">Número de miembro</label><input className="field" value={memberId} onChange={(e) => setMemberId(e.target.value)} /></div>
+          <div>
+            <label className="label">Nombre del plan</label>
+            <select className="field" value={planName} onChange={(e) => setPlanName(e.target.value)}>
+              <option value="">Selecciona un plan…</option>
+              {plans.map((p) => <option key={p.id} value={p.name}>{p.name}</option>)}
+            </select>
+          </div>
+          <div><label className="label">Número del plan (# Plan)</label><input className="field" value={memberId} onChange={(e) => setMemberId(e.target.value)} /></div>
           <div><label className="label">Foto del frente</label><input ref={frontRef} type="file" accept="image/*" className="field !py-2" /></div>
           <div><label className="label">Foto del reverso</label><input ref={backRef} type="file" accept="image/*" className="field !py-2" /></div>
         </div>

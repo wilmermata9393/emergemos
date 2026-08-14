@@ -28,6 +28,17 @@ export class OrdersService {
   listLabTests() {
     return this.prisma.labTest.findMany({ where: { isActive: true }, orderBy: [{ category: 'asc' }, { name: 'asc' }] });
   }
+  listAllLabTests() {
+    return this.prisma.labTest.findMany({ orderBy: [{ isActive: 'desc' }, { category: 'asc' }, { name: 'asc' }] });
+  }
+  createLabTest(data: { name: string; code?: string; category?: string }) {
+    return this.prisma.labTest.create({ data: { name: data.name, code: data.code, category: data.category } });
+  }
+  async setLabTestActive(id: string, isActive: boolean) {
+    const t = await this.prisma.labTest.findUnique({ where: { id } });
+    if (!t) throw new NotFoundException('Prueba no encontrada.');
+    return this.prisma.labTest.update({ where: { id }, data: { isActive } });
+  }
 
   // ---- Órdenes de laboratorio ----
   async createLabOrder(patientId: string, dto: CreateLabOrderDto, orderedById: string) {

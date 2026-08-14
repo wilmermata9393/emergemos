@@ -30,6 +30,24 @@ export class NotesService {
     });
   }
 
+  /// Crea una plantilla personalizada (nombre, disciplina y secciones).
+  createTemplate(data: {
+    name: string;
+    description?: string;
+    discipline?: Discipline;
+    sections: { key: string; title: string; type: string }[];
+  }) {
+    return this.prisma.noteTemplate.create({
+      data: {
+        name: data.name,
+        description: data.description,
+        discipline: data.discipline ?? null,
+        isSystem: false,
+        schema: { sections: data.sections } as any,
+      },
+    });
+  }
+
   /// Crea una nota en estado BORRADOR.
   async create(patientId: string, dto: CreateNoteDto, authorId: string) {
     const patient = await this.prisma.patient.findUnique({ where: { id: patientId } });

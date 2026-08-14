@@ -706,6 +706,17 @@ model Appointment {
 //  ÓRDENES: LABORATORIOS Y MEDICAMENTOS (Fase 4)
 // ----------------------------------------------------------------------------
 
+/// Catálogo de planes médicos que la clínica ACEPTA (para el select del plan).
+model InsurancePlan {
+  id       String  @id @default(cuid())
+  name     String
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+
+  @@index([isActive])
+}
+
 /// Catálogo de pruebas de laboratorio (para el checklist).
 model LabTest {
   id       String  @id @default(cuid())

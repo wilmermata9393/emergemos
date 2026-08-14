@@ -60,6 +60,7 @@ async function main() {
   await seedScheduling(doctora.id);
   await seedLabTests();
   await seedConsentDocuments();
+  await seedInsurancePlans();
 
   console.log('Seed completado:');
   console.log('  Admin    -> teléfono +17870000001  clave: Cambiar123!');
@@ -244,6 +245,16 @@ async function seedConsentDocuments() {
     });
   }
   console.log(`  Consentimientos -> ${docs.length} documentos estándar.`);
+}
+
+/// Planes médicos aceptados (ejemplos comunes; se editan desde el dashboard).
+async function seedInsurancePlans() {
+  const count = await prisma.insurancePlan.count();
+  if (count === 0) {
+    const plans = ['MCS', 'Triple-S', 'MMM', 'First Medical', 'Humana', 'Plan de Salud Menonita', 'Medicare', 'Medicaid', 'Privado / Pago directo'];
+    await prisma.insurancePlan.createMany({ data: plans.map((name) => ({ name })) });
+  }
+  console.log('  Planes médicos -> catálogo de planes aceptados.');
 }
 
 main()

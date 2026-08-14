@@ -42,8 +42,7 @@ export default function DashboardPage() {
     { href: '/schedule', icon: '📅', title: 'Mi agenda', desc: 'Citas y disponibilidad' },
     { href: '/notifications', icon: '🔔', title: 'Notificaciones', desc: 'Avisos y recordatorios' },
     ...(isAdmin ? [
-      { href: '/admin/users', icon: '🧑‍⚕️', title: 'Usuarios / Staff', desc: 'Gestionar el equipo' },
-      { href: '/admin/services', icon: '🛠️', title: 'Servicios', desc: 'Servicios y precios' },
+      { href: '/admin', icon: '⚙️', title: 'Administración', desc: 'Usuarios, servicios, planes, labs, plantillas' },
     ] : []),
   ];
 
