@@ -54,37 +54,37 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen">
       <header className="border-b border-slate-200 bg-white">
-        <div className="flex items-center justify-between px-6 py-2">
-          <Link href="/dashboard">
+        <div className="flex items-center gap-4 px-6 py-3">
+          <Link href="/dashboard" className="shrink-0">
             <Logo size="lg" tagline={false} />
           </Link>
-          <div className="flex items-center gap-3">
+          {/* Menú centrado en el espacio disponible (con scroll en móvil) */}
+          <nav className="flex flex-1 items-center justify-center gap-1 overflow-x-auto">
+            {[...BASE_NAV, ...(user?.role === 'ADMIN' ? ADMIN_NAV : [])].map((n) => (
+              <Link
+                key={n.href}
+                href={n.href}
+                className={`relative shrink-0 rounded-lg px-4 py-2.5 text-[0.95rem] font-semibold ${pathname === n.href || (n.href !== '/dashboard' && pathname?.startsWith(n.href)) ? 'bg-brand-50 text-brand-700' : 'text-slate-600 hover:bg-slate-100'}`}
+              >
+                {n.label}
+                {n.href === '/notifications' && counts.avisos > 0 && (
+                  <span className="ml-1 inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-accent-600 px-1.5 py-0.5 text-xs font-bold text-white">{counts.avisos}</span>
+                )}
+                {n.href === '/messages' && counts.messages > 0 && (
+                  <span className="ml-1 inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-accent-600 px-1.5 py-0.5 text-xs font-bold text-white">{counts.messages}</span>
+                )}
+              </Link>
+            ))}
+          </nav>
+          <div className="flex shrink-0 items-center gap-3">
             {user && (
-              <span className="hidden text-sm text-slate-500 sm:block">
+              <span className="hidden text-sm text-slate-500 lg:block">
                 {user.firstName} {user.lastName} · {ROLE_LABEL[user.role] ?? user.role}
               </span>
             )}
             <button onClick={logout} className="btn-ghost !px-4 !py-2 text-sm">Salir</button>
           </div>
         </div>
-        {/* Navegación (siempre visible, con scroll horizontal en móvil) */}
-        <nav className="flex gap-1 overflow-x-auto px-5 pb-2">
-          {[...BASE_NAV, ...(user?.role === 'ADMIN' ? ADMIN_NAV : [])].map((n) => (
-            <Link
-              key={n.href}
-              href={n.href}
-              className={`relative shrink-0 rounded-lg px-3 py-2 text-sm font-semibold ${pathname === n.href || (n.href !== '/dashboard' && pathname?.startsWith(n.href)) ? 'bg-brand-50 text-brand-700' : 'text-slate-600 hover:bg-slate-100'}`}
-            >
-              {n.label}
-              {n.href === '/notifications' && counts.avisos > 0 && (
-                <span className="ml-1 inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-accent-600 px-1.5 py-0.5 text-xs font-bold text-white">{counts.avisos}</span>
-              )}
-              {n.href === '/messages' && counts.messages > 0 && (
-                <span className="ml-1 inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-accent-600 px-1.5 py-0.5 text-xs font-bold text-white">{counts.messages}</span>
-              )}
-            </Link>
-          ))}
-        </nav>
       </header>
       <main className="mx-auto max-w-5xl px-4 py-8">{children}</main>
       <IncomingCall />
