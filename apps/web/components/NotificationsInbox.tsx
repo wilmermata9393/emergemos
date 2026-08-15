@@ -1,16 +1,18 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 import { enablePush, pushSupported } from '@/lib/push';
 
-interface Notif { id: string; type: string; title: string; body: string; readAt?: string | null; createdAt: string }
+interface Notif { id: string; type: string; title: string; body: string; relatedId?: string | null; readAt?: string | null; createdAt: string }
 
 const ICON: Record<string, string> = {
   APPOINTMENT_REMINDER: '📅', BIRTHDAY: '🎉', FOLLOW_UP: '📋', MESSAGE: '💬', GENERAL: '🔔',
 };
 
 export default function NotificationsInbox() {
+  const router = useRouter();
   const [items, setItems] = useState<Notif[]>([]);
   const [q, setQ] = useState('');
   const [error, setError] = useState('');
@@ -71,7 +73,11 @@ export default function NotificationsInbox() {
         {items.filter((n) => (n.title + ' ' + n.body).toLowerCase().includes(q.toLowerCase())).map((n) => (
           <button
             key={n.id}
-            onClick={() => !n.readAt && markRead(n.id)}
+            onClick={() => {
+              if (!n.readAt) markRead(n.id);
+              // Los anuncios (con imagen/términos) abren su detalle.
+              if (n.type === 'GENERAL' && n.relatedId) router.push(`/announcements/${n.relatedId}`);
+            }}
             className={`card flex w-full items-start gap-3 text-left ${n.readAt ? 'opacity-60' : 'border-brand-200 bg-brand-50/40'}`}
           >
             <span className="text-2xl">{ICON[n.type] ?? '🔔'}</span>

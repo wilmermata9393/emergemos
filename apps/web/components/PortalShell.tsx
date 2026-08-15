@@ -50,8 +50,8 @@ export default function PortalShell({ children }: { children: React.ReactNode })
   return (
     <div className="min-h-screen">
       <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-3xl items-center justify-between px-4 py-4">
-          <Logo size="sm" tagline={false} />
+        <div className="mx-auto flex max-w-3xl items-center justify-between px-4 py-3">
+          <Logo size="lg" tagline={false} />
           <div className="flex items-center gap-3">
             <span className="hidden text-slate-600 sm:block">Hola, {name}</span>
             <button

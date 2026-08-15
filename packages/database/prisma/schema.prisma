@@ -831,6 +831,16 @@ model Notification {
   @@index([userId, createdAt])
 }
 
+/// Anuncio/promoción con arte (imagen) y términos y condiciones.
+model Announcement {
+  id          String   @id @default(cuid())
+  title       String
+  body        String
+  terms       String?
+  imageFileId String?
+  createdAt   DateTime @default(now())
+}
+
 /// Suscripción de notificaciones push (Web Push) de un dispositivo/navegador.
 model PushSubscription {
   id        String   @id @default(cuid())
